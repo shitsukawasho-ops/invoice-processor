@@ -1,5 +1,6 @@
 import requests
 import json
+from config import config
 
 class NotificationService:
     def __init__(self):
