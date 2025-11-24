@@ -72,12 +72,22 @@ def process_single_email(email):
 
         # 4. Send Email
         logs.append(f"メールを送信中: {forwarding_address}")
-        email_service.send_email(
+        send_result = email_service.send_email(
             to_address=forwarding_address,
             subject=f"Fwd: {email['subject']}",
             body="請求書を転送します。",
             attachments=[pdf_path] if pdf_path else None
         )
+        
+        if not send_result:
+            error_msg = "メール送信に失敗しました（Gmail APIが利用できない可能性があります）"
+            logs.append(error_msg)
+            notification_service.notify_slack("メール送信エラー", {
+                "Error": error_msg,
+                "Email": email['subject'],
+                "To": forwarding_address
+            })
+            return {"status": "error", "logs": logs}
         
         # 5. Notify Slack
         logs.append("Slackに通知中...")
