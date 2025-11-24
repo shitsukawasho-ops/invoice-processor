@@ -1,7 +1,5 @@
-
 import requests
 import os
-from playwright.sync_api import sync_playwright
 
 class BrowserService:
     def __init__(self, download_dir="downloads"):
