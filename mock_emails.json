@@ -1,0 +1,25 @@
+[
+    {
+        "id": "1",
+        "subject": "Invoice for Service A",
+        "sender": "billing@example.com",
+        "body": "Please find the invoice attached.",
+        "attachments": [
+            "invoice.pdf"
+        ]
+    },
+    {
+        "id": "2",
+        "subject": "Invoice for Service B",
+        "sender": "accounts@serviceb.com",
+        "body": "Please download your invoice from: https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        "attachments": []
+    },
+    {
+        "id": "3",
+        "subject": "No Invoice",
+        "sender": "spam@example.com",
+        "body": "Hello world",
+        "attachments": []
+    }
+]

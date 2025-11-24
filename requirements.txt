@@ -1,0 +1,11 @@
+openai
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+playwright
+requests
+slack_sdk
+python-dotenv
+beautifulsoup4
+flask
+gunicorn

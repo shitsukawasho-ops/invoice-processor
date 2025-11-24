@@ -1,0 +1,12 @@
+[
+    {
+        "client_name": "Service A",
+        "sender_domain": "example.com",
+        "mf_forward_email": "111111@mf.box"
+    },
+    {
+        "client_name": "Service B",
+        "sender_domain": "serviceb.com",
+        "mf_forward_email": "222222@mf.box"
+    }
+]
