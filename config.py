@@ -12,6 +12,7 @@ class Config:
     # Slack
     SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN')
     SLACK_CHANNEL_ID = os.getenv('SLACK_CHANNEL_ID')
+    SLACK_WEBHOOK_URL = os.getenv('SLACK_WEBHOOK_URL')
 
     # Google
     GOOGLE_CREDENTIALS_FILE = os.getenv('GOOGLE_CREDENTIALS_FILE', 'google_credentials.json')
