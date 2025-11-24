@@ -35,6 +35,7 @@ class BrowserService:
                     f.write(response.content)
                 print(f"PDF downloaded successfully: {filepath}")
                 return filepath
-             print(f"Playwright launch failed: {e}")
+        except Exception as e:
+            print(f"Requests download failed: {e}")
 
         return None
