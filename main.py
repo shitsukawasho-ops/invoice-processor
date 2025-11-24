@@ -34,21 +34,25 @@ def process_single_email(email):
         analysis_result = ai_service.analyze_email_body(email['body'])
         logs.append(f"解析結果: {analysis_result}")
         
-        # 2. Identify Sender & Forwarding Address
-        logs.append("送信者ドメインの特定中...")
-        sender_domain = analysis_result.get('sender_name')
-        if not sender_domain or '@' not in sender_domain:
-             sender_domain = email['sender']
+        # 2. Identify Company & Forwarding Address
+        logs.append("会社名の特定中...")
+        company_name = analysis_result.get('company_name')
+        
+        if not company_name or company_name == "Unknown Company":
+            error_msg = f"会社名を特定できませんでした"
+            logs.append(error_msg)
+            notification_service.notify_slack("請求書処理エラー", {"Error": error_msg, "Email": email['subject']})
+            return {"status": "error", "logs": logs}
              
-        forwarding_address = master_data_service.get_forwarding_address(sender_domain)
+        forwarding_address = master_data_service.get_forwarding_address(company_name)
         
         if not forwarding_address:
-            error_msg = f"転送先が見つかりません: {sender_domain}"
+            error_msg = f"転送先が見つかりません: {company_name}"
             logs.append(error_msg)
             notification_service.notify_slack("請求書処理エラー", {"Error": error_msg, "Email": email['subject']})
             return {"status": "error", "logs": logs}
             
-        logs.append(f"転送先を特定: {forwarding_address}")
+        logs.append(f"転送先を特定: {forwarding_address} (会社名: {company_name})")
 
         # 3. Download PDF
         pdf_path = None

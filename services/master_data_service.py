@@ -43,18 +43,24 @@ class MasterDataService:
         with open(self.runtime_file, 'w') as f:
             json.dump(rules, f)
 
-    def get_forwarding_address(self, sender_identifier):
+    def get_forwarding_address(self, company_name):
         """
-        Looks up the forwarding address for the given sender (domain or email).
+        Looks up the forwarding address for the given company name.
         Returns the email address or None.
         """
+        if not company_name:
+            return None
+            
         rules = self.get_all_rules()
         
-        # Simple domain matching
-        domain = sender_identifier.split('@')[-1] if '@' in sender_identifier else sender_identifier
+        # Normalize company name for matching (lowercase, strip whitespace)
+        company_name_normalized = company_name.lower().strip()
         
         for entry in rules:
-            if entry['sender_domain'] in domain:
+            rule_company = entry.get('company_name', '').lower().strip()
+            
+            # Partial match: check if rule company name is in the provided company name or vice versa
+            if rule_company in company_name_normalized or company_name_normalized in rule_company:
                 return entry['mf_forward_email']
         
         return None

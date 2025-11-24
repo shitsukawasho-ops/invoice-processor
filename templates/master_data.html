@@ -154,8 +154,8 @@
                 <h3>新規ルールの追加</h3>
                 <form id="add-form">
                     <div class="form-group">
-                        <label>送信元ドメイン (例: amazon.co.jp)</label>
-                        <input type="text" id="domain" required placeholder="example.com">
+                        <label>会社名 (例: Amazon)</label>
+                        <input type="text" id="company" required placeholder="Amazon">
                     </div>
                     <div class="form-group">
                         <label>転送先メールアドレス (Money Forward)</label>
@@ -169,7 +169,7 @@
             <table id="rules-table">
                 <thead>
                     <tr>
-                        <th>送信元ドメイン</th>
+                        <th>会社名</th>
                         <th>転送先アドレス</th>
                         <th>操作</th>
                     </tr>
@@ -191,10 +191,10 @@
             rules.forEach((rule, index) => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${rule.sender_domain}</td>
+                    <td>${rule.company_name}</td>
                     <td>${rule.mf_forward_email}</td>
                     <td>
-                        <button onclick="deleteRule('${rule.sender_domain}')" style="color: red; background: none; border: none; cursor: pointer;">削除</button>
+                        <button onclick="deleteRule('${encodeURIComponent(rule.company_name)}')" style="color: red; background: none; border: none; cursor: pointer;">削除</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -203,23 +203,23 @@
 
         async function addRule(event) {
             event.preventDefault();
-            const domain = document.getElementById('domain').value;
+            const company = document.getElementById('company').value;
             const email = document.getElementById('email').value;
 
             await fetch('/api/master-data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sender_domain: domain, mf_forward_email: email })
+                body: JSON.stringify({ company_name: company, mf_forward_email: email })
             });
 
             document.getElementById('add-form').reset();
             loadRules();
         }
 
-        async function deleteRule(domain) {
+        async function deleteRule(company) {
             if (!confirm('本当に削除しますか？')) return;
 
-            await fetch(`/api/master-data/${domain}`, {
+            await fetch(`/api/master-data/${encodeURIComponent(company)}`, {
                 method: 'DELETE'
             });
             loadRules();

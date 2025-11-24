@@ -63,57 +63,69 @@ class EmailService:
 
     def fetch_emails(self):
         """
-        Fetches unread emails from Gmail.
-        Falls back to mock file if API is unavailable.
+        Fetches unread emails from Gmail API (filtered to billing@ouchi.inc)
         """
-        if self.service:
-            try:
-                # Call the Gmail API
-                results = self.service.users().messages().list(userId='me', q='is:unread').execute()
-                messages = results.get('messages', [])
-                
-                email_list = []
-                for message in messages:
-                    msg = self.service.users().messages().get(userId='me', id=message['id']).execute()
-                    payload = msg['payload']
-                    headers = payload.get('headers', [])
-                    
-                    subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "No Subject")
-                    sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
-                    
-                    body = ""
-                    if 'parts' in payload:
-                        for part in payload['parts']:
-                            if part['mimeType'] == 'text/plain':
-                                data = part['body'].get('data')
-                                if data:
-                                    body += base64.urlsafe_b64decode(data).decode()
-                    elif 'body' in payload:
-                        data = payload['body'].get('data')
-                        if data:
-                            body += base64.urlsafe_b64decode(data).decode()
-                            
-                    # Attachments
-                    attachments = []
-                    # Simplified attachment detection
-                    if 'parts' in payload:
-                        for part in payload['parts']:
-                            if part.get('filename'):
-                                attachments.append(part['filename'])
+        if not self.service:
+            print("Gmail service not available. Using mock data.")
+            return self._load_mock_emails()
 
-                    email_list.append({
-                        "id": message['id'],
-                        "subject": subject,
-                        "sender": sender,
-                        "body": body,
-                        "attachments": attachments
-                    })
-                return email_list
-            except Exception as e:
-                print(f"Gmail API error: {e}")
+        try:
+            # Query for unread emails sent to billing@ouchi.inc only
+            results = self.service.users().messages().list(
+                userId='me',
+                q='is:unread to:billing@ouchi.inc',
+                maxResults=10
+            ).execute()
+            
+            messages = results.get('messages', [])
+            
+            email_list = []
+            for message in messages:
+                msg = self.service.users().messages().get(userId='me', id=message['id']).execute()
+                payload = msg['payload']
+                headers = payload.get('headers', [])
+                
+                subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "No Subject")
+                sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
+                
+                body = ""
+                if 'parts' in payload:
+                    for part in payload['parts']:
+                        if part['mimeType'] == 'text/plain':
+                            data = part['body'].get('data')
+                            if data:
+                                body += base64.urlsafe_b64decode(data).decode()
+                elif 'body' in payload:
+                    data = payload['body'].get('data')
+                    if data:
+                        body += base64.urlsafe_b64decode(data).decode()
+                        
+                # Attachments
+                attachments = []
+                # Simplified attachment detection
+                if 'parts' in payload:
+                    for part in payload['parts']:
+                        if part.get('filename'):
+                            attachments.append(part['filename'])
+
+                email_list.append({
+                    "id": message['id'],
+                    "subject": subject,
+                    "sender": sender,
+                    "body": body,
+                    "attachments": attachments
+                })
+            return email_list
+        except Exception as e:
+            print(f"Gmail API error: {e}")
         
         # Fallback to mock
+        return self._load_mock_emails()
+    
+    def _load_mock_emails(self):
+        """Load emails from mock JSON file"""
         if os.path.exists(self.mock_file):
+            import json
             with open(self.mock_file, 'r') as f:
                 return json.load(f)
         return []

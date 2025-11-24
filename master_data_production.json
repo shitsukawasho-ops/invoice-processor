@@ -1,22 +1,14 @@
 [
     {
-        "sender_domain": "service-a.com",
+        "company_name": "Amazon",
+        "mf_forward_email": "111111@mf.box"
+    },
+    {
+        "company_name": "楽天",
         "mf_forward_email": "222222@mf.box"
     },
     {
-        "sender_domain": "service-b.com",
-        "mf_forward_email": "222222@mf.box"
-    },
-    {
-        "sender_domain": "example.com",
-        "mf_forward_email": "222222@mf.box"
-    },
-    {
-        "sender_domain": "google.com",
-        "mf_forward_email": "222222@mf.box"
-    },
-    {
-        "sender_domain": "amazon.com",
-        "mf_forward_email": "222222@mf.box"
+        "company_name": "Yahoo",
+        "mf_forward_email": "333333@mf.box"
     }
 ]
