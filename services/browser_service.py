@@ -1,10 +1,16 @@
+```python
 import requests
 import os
 from playwright.sync_api import sync_playwright
 
 class BrowserService:
-    def __init__(self):
-        self.download_dir = "downloads"
+    def __init__(self, download_dir="downloads"):
+        # Vercelなどのサーバーレス環境では /tmp のみが書き込み可能
+        if os.environ.get('VERCEL'):
+            self.download_dir = os.path.join('/tmp', download_dir)
+        else:
+            self.download_dir = download_dir
+            
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
 
