@@ -41,8 +41,12 @@ Thumbs.db
 # Project specific
 downloads/
 *.pdf
-credentials.json
-token.json
+
 
 # Logs
 *.log
+
+# Secrets
+credentials.json
+token.json
+google_credentials.json
