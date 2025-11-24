@@ -112,5 +112,23 @@ def process_email_route(email_id):
         log(f"Error: {str(e)}")
         return jsonify({"status": "error", "logs": logs}), 500
 
+@app.route('/api/master-data', methods=['GET'])
+def get_master_data():
+    service = MasterDataService()
+    return jsonify(service.get_all_rules())
+
+@app.route('/api/master-data', methods=['POST'])
+def add_master_data():
+    data = request.json
+    service = MasterDataService()
+    service.add_rule(data['company_name'], data['mf_forward_email'])
+    return jsonify({"status": "success"})
+
+@app.route('/api/master-data/<path:company>', methods=['DELETE'])
+def delete_master_data(company):
+    service = MasterDataService()
+    service.delete_rule(company)
+    return jsonify({"status": "success"})
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -70,10 +70,12 @@ class EmailService:
             return self._load_mock_emails()
 
         try:
-            # Query for unread emails sent to billing@ouchi.inc only
+            # Query for unread emails sent to billing@ouchi.inc
+            #  Note: Gmail treats sub-addresses (billing@) as part of contact@
+            # Using deliveredto: to match sub-addresses properly
             results = self.service.users().messages().list(
                 userId='me',
-                q='is:unread to:billing@ouchi.inc',
+                q='is:unread deliveredto:billing@ouchi.inc',
                 maxResults=10
             ).execute()
             

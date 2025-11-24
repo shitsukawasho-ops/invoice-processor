@@ -29,17 +29,17 @@ class MasterDataService:
                 return json.load(f)
         return []
 
-    def add_rule(self, domain, email):
+    def add_rule(self, company_name, email):
         """Adds a new rule."""
         rules = self.get_all_rules()
-        rules.append({"sender_domain": domain, "mf_forward_email": email})
+        rules.append({"company_name": company_name, "mf_forward_email": email})
         with open(self.runtime_file, 'w') as f:
             json.dump(rules, f)
 
-    def delete_rule(self, domain):
-        """Deletes a rule by domain."""
+    def delete_rule(self, company_name):
+        """Deletes a rule by company name."""
         rules = self.get_all_rules()
-        rules = [r for r in rules if r['sender_domain'] != domain]
+        rules = [r for r in rules if r.get('company_name') != company_name]
         with open(self.runtime_file, 'w') as f:
             json.dump(rules, f)
 
