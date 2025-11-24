@@ -42,30 +42,24 @@ python app.py
 
 ブラウザで `http://127.0.0.1:5000` にアクセス
 
-## デプロイ（Render.com）
+## デプロイ
 
-### 1. GitHubリポジトリの作成
-このコードをGitHubにpush
+### Vercelへのデプロイ（推奨）
 
-### 2. Render.comでWebサービスを作成
-1. https://render.com/ にアクセス
-2. 「New +」→「Web Service」を選択
-3. GitHubリポジトリを接続
-4. 以下を設定：
-   - **Name**: 任意の名前
-   - **Environment**: Python 3
-   - **Build Command**: `pip install -r requirements.txt && python -m playwright install chromium`
-   - **Start Command**: `gunicorn app:app`
-   - **Instance Type**: Free
+詳細は [`DEPLOYMENT.md`](DEPLOYMENT.md) を参照してください。
 
-### 3. 環境変数の設定（オプション）
-Render.comの設定画面で以下を追加：
-- `OPENAI_API_KEY`
-- `SLACK_BOT_TOKEN`
-- `SLACK_CHANNEL_ID`
+**簡易手順:**
+1. GitHubリポジトリを作成
+2. https://vercel.com/ にアクセス
+3. GitHubと連携してプロジェクトをインポート
+4. 「Deploy」をクリック
 
-### 4. デプロイ
-「Create Web Service」をクリック
+**注意**: Vercelではヘッドレスブラウザ（Playwright）が動作しないため、直接ダウンロード可能なPDF URLのみ対応します。Playwrightが必要な場合はRender.comを推奨。
+
+### その他のデプロイ先
+- **Render.com**: Playwright対応（無料枠あり）
+- **Google Cloud Functions**: Gmail連携が容易
+- **AWS Lambda**: スケーラブル
 
 ## アーキテクチャ
 
