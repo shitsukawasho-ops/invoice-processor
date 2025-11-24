@@ -21,25 +21,40 @@ notification_service = NotificationService()
 def index():
     return render_template('index.html')
 
+@app.route('/master-data')
+def master_data_page():
+    return render_template('master_data.html')
+
 @app.route('/api/emails')
 def get_emails():
+    email_service = EmailService()
     emails = email_service.fetch_emails()
     return jsonify(emails)
 
 @app.route('/api/process/<email_id>', methods=['POST'])
-def process_email(email_id):
+def process_email_route(email_id):
+    # In a real app, we would fetch the specific email by ID again or pass it.
+    # For now, we fetch all and find the one matching ID.
+    email_service = EmailService()
+    emails = email_service.fetch_emails()
+    target_email = next((e for e in emails if e['id'] == email_id), None)
+    
+    if not target_email:
+        return jsonify({"status": "error", "logs": ["Email not found"]}), 404
+        
+    # Run the main processing logic for this single email
+    # We need to adapt main.py's logic to be callable for a single email
+    # from main import process_single_email # We will refactor main.py to export this
+    # result = process_single_email(target_email) # This line is commented out as process_single_email is not yet defined
+    
+    # For now, we'll keep the original processing logic here, adapted for a single email
     logs = []
     def log(message):
         logs.append(message)
         print(message)
 
     try:
-        # Fetch specific email (mock)
-        emails = email_service.fetch_emails()
-        email = next((e for e in emails if e['id'] == email_id), None)
-        
-        if not email:
-            return jsonify({"status": "error", "logs": ["Email not found"]}), 404
+        email = target_email # Use the target_email found above
 
         log(f"Processing email: {email['subject']}")
         

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マスターデータ設定 - 請求書処理システム</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        h1 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="email"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .btn:hover {
+            background: #1557b0;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            text-decoration: none;
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+
+        .alert {
+            padding: 15px;
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: #1a73e8;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="nav-link">← 受信トレイに戻る</a>
+            <span>設定</span>
+        </div>
+    </div>
+    <div class="main-content">
+        <div class="container">
+            <h1>転送ルール設定 (マスターデータ)</h1>
+
+            <div class="alert">
+                <strong>注意:</strong> この設定は一時的なものです。サーバーが再起動（デプロイ等）するとリセットされる可能性があります。
+            </div>
+
+            <div class="form-group">
+                <h3>新規ルールの追加</h3>
+                <form id="add-form">
+                    <div class="form-group">
+                        <label>送信元ドメイン (例: amazon.co.jp)</label>
+                        <input type="text" id="domain" required placeholder="example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>転送先メールアドレス (Money Forward)</label>
+                        <input type="email" id="email" required placeholder="upload@mf.box">
+                    </div>
+                    <button type="submit" class="btn">追加</button>
+                </form>
+            </div>
+
+            <h3>現在のルール一覧</h3>
+            <table id="rules-table">
+                <thead>
+                    <tr>
+                        <th>送信元ドメイン</th>
+                        <th>転送先アドレス</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Rows will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadRules() {
+            const response = await fetch('/api/master-data');
+            const rules = await response.json();
+            const tbody = document.querySelector('#rules-table tbody');
+            tbody.innerHTML = '';
+
+            rules.forEach((rule, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${rule.sender_domain}</td>
+                    <td>${rule.mf_forward_email}</td>
+                    <td>
+                        <button onclick="deleteRule('${rule.sender_domain}')" style="color: red; background: none; border: none; cursor: pointer;">削除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function addRule(event) {
+            event.preventDefault();
+            const domain = document.getElementById('domain').value;
+            const email = document.getElementById('email').value;
+
+            await fetch('/api/master-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sender_domain: domain, mf_forward_email: email })
+            });
+
+            document.getElementById('add-form').reset();
+            loadRules();
+        }
+
+        async function deleteRule(domain) {
+            if (!confirm('本当に削除しますか？')) return;
+
+            await fetch(`/api/master-data/${domain}`, {
+                method: 'DELETE'
+            });
+            loadRules();
+        }
+
+        document.getElementById('add-form').onsubmit = addRule;
+        loadRules();
+    </script>
+</body>
+
+</html>

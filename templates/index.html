@@ -1,55 +1,190 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice Processor - Local Test</title>
+    <title>請求書処理システム</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background-color: #f5f5f5; }
-        .sidebar { width: 300px; background: white; border-right: 1px solid #ddd; overflow-y: auto; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 15px; border-bottom: 1px solid #ddd; font-weight: bold; background: #f8f9fa; }
-        .email-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
-        .email-item:hover { background: #f0f0f0; }
-        .email-item.active { background: #e8f0fe; border-left: 4px solid #1a73e8; }
-        .email-subject { font-weight: bold; margin-bottom: 5px; }
-        .email-sender { color: #5f6368; font-size: 0.9em; }
-        
-        .main-content { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
-        .email-detail { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; display: none; }
-        .detail-header { border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
-        .detail-subject { font-size: 1.5em; font-weight: bold; margin-bottom: 10px; }
-        .detail-meta { color: #5f6368; margin-bottom: 10px; }
-        .detail-body { white-space: pre-wrap; line-height: 1.5; }
-        .action-bar { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; }
-        .btn { padding: 10px 20px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-        .btn:hover { background: #1557b0; }
-        .btn:disabled { background: #ccc; cursor: not-allowed; }
-        
-        .logs-container { background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; height: 200px; overflow-y: auto; display: none; }
-        .log-entry { margin-bottom: 5px; }
-        .log-timestamp { color: #888; margin-right: 10px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .email-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .email-item:hover {
+            background: #f0f0f0;
+        }
+
+        .email-item.active {
+            background: #e8f0fe;
+            border-left: 4px solid #1a73e8;
+        }
+
+        .email-subject {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .email-sender {
+            color: #5f6368;
+            font-size: 0.9em;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .email-detail {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .detail-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-subject {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .detail-meta {
+            color: #5f6368;
+            margin-bottom: 10px;
+        }
+
+        .detail-body {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .action-bar {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .btn:hover {
+            background: #1557b0;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            margin-left: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .logs-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: #1a73e8;
+            font-size: 0.9em;
+        }
     </style>
 </head>
+
 <body>
     <div class="sidebar">
-        <div class="sidebar-header">Inbox</div>
+        <div class="sidebar-header">
+            <span>受信トレイ</span>
+            <a href="/master-data" class="nav-link">設定</a>
+        </div>
         <div id="email-list">
             <!-- Email items will be populated here -->
         </div>
     </div>
     <div class="main-content">
         <div id="empty-state" style="text-align: center; margin-top: 100px; color: #888;">
-            Select an email to view details
+            メールを選択して詳細を表示
         </div>
-        
+
         <div id="email-detail" class="email-detail">
             <div class="detail-header">
                 <div class="detail-subject" id="detail-subject"></div>
-                <div class="detail-meta">From: <span id="detail-sender"></span></div>
+                <div class="detail-meta">送信者: <span id="detail-sender"></span></div>
             </div>
             <div class="detail-body" id="detail-body"></div>
             <div class="action-bar">
-                <button id="process-btn" class="btn">Process Invoice</button>
+                <button id="process-btn" class="btn">請求書を処理</button>
             </div>
         </div>
 
@@ -97,7 +232,7 @@
             
             const btn = document.getElementById('process-btn');
             btn.disabled = false;
-            btn.textContent = 'Process Invoice';
+            btn.textContent = '請求書を処理';
         }
 
         document.getElementById('process-btn').onclick = async () => {
@@ -105,11 +240,11 @@
             
             const btn = document.getElementById('process-btn');
             btn.disabled = true;
-            btn.textContent = 'Processing...';
+            btn.textContent = '処理中...';
             
             const logsContainer = document.getElementById('logs-container');
             logsContainer.style.display = 'block';
-            logsContainer.innerHTML = '<div class="log-entry">Starting processing...</div>';
+            logsContainer.innerHTML = '<div class="log-entry">処理を開始します...</div>';
             
             try {
                 const response = await fetch(`/api/process/${currentEmailId}`, { method: 'POST' });
@@ -126,22 +261,23 @@
                 statusEntry.className = 'log-entry';
                 statusEntry.style.color = result.status === 'success' ? '#00ff00' : '#ff4444';
                 statusEntry.style.fontWeight = 'bold';
-                statusEntry.textContent = `> Finished with status: ${result.status.toUpperCase()}`;
+                statusEntry.textContent = `> ステータス: ${result.status.toUpperCase()} で完了しました`;
                 logsContainer.appendChild(statusEntry);
                 
             } catch (e) {
                 const entry = document.createElement('div');
                 entry.className = 'log-entry';
                 entry.style.color = '#ff4444';
-                entry.textContent = `> Error: ${e.message}`;
+                entry.textContent = `> エラー: ${e.message}`;
                 logsContainer.appendChild(entry);
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Process Invoice';
+                btn.textContent = '請求書を処理';
             }
         };
 
         loadEmails();
     </script>
 </body>
+
 </html>
