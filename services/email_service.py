@@ -55,11 +55,15 @@ class EmailService:
                     # Save the credentials for the next run
                     with open(config.GOOGLE_TOKEN_FILE, 'w') as token:
                         token.write(self.creds.to_json())
+                    print(f"[EmailService] New credentials obtained and saved to {config.GOOGLE_TOKEN_FILE}")
                 except Exception as e:
-                    print(f"Error during OAuth flow: {e}")
+                    print(f"[EmailService] Error during OAuth flow: {e}")
                     
         if self.creds:
             self.service = build('gmail', 'v1', credentials=self.creds)
+            print(f"[EmailService] Gmail service initialized successfully")
+        else:
+            print(f"[EmailService] WARNING: Gmail service NOT initialized - will use mock mode")
 
     def fetch_emails(self):
         """
@@ -146,8 +150,12 @@ class EmailService:
         """
         Sends or forwards an email using Gmail API with attachments.
         """
+        print(f"[EmailService.send_email] Called with to={to_address}, attachments={attachments}")
+        print(f"[EmailService.send_email] Gmail service available: {self.service is not None}")
+        
         if self.service:
             try:
+                print(f"[EmailService.send_email] Building message...")
                 message = MIMEMultipart()
                 message['to'] = to_address
                 message['subject'] = subject
@@ -158,8 +166,10 @@ class EmailService:
                 
                 # Attach files
                 if attachments:
+                    print(f"[EmailService.send_email] Processing {len(attachments)} attachments...")
                     for file_path in attachments:
                         if file_path and os.path.exists(file_path):
+                            print(f"[EmailService.send_email] Attaching file: {file_path}")
                             with open(file_path, 'rb') as f:
                                 part = MIMEBase('application', 'octet-stream')
                                 part.set_payload(f.read())
@@ -169,19 +179,25 @@ class EmailService:
                                     f'attachment; filename= {os.path.basename(file_path)}'
                                 )
                                 message.attach(part)
+                        else:
+                            print(f"[EmailService.send_email] WARNING: File not found: {file_path}")
                 
                 # Encode and send
+                print(f"[EmailService.send_email] Encoding and sending...")
                 raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
                 body_data = {'raw': raw}
                 
                 self.service.users().messages().send(userId='me', body=body_data).execute()
-                print(f"Email sent to {to_address} with {len(attachments) if attachments else 0} attachments")
+                print(f"[EmailService.send_email] SUCCESS: Email sent to {to_address} with {len(attachments) if attachments else 0} attachments")
                 return True
             except Exception as e:
-                print(f"Error sending email: {e}")
+                print(f"[EmailService.send_email] ERROR: Failed to send email: {e}")
+                import traceback
+                traceback.print_exc()
                 return False
 
         # Mock send (fallback when Gmail API is not available)
+        print(f"[EmailService.send_email] MOCK MODE: Gmail service not available")
         print(f"[MOCK] Sending email to {to_address}")
         print(f"[MOCK]   Subject: {subject}")
         print(f"[MOCK]   Body: {body}")

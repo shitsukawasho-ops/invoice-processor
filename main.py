@@ -79,6 +79,9 @@ def process_single_email(email):
             attachments=[pdf_path] if pdf_path else None
         )
         
+        logs.append(f"送信結果: {send_result}")
+        print(f"[main.process_single_email] send_result = {send_result}")
+        
         if not send_result:
             error_msg = "メール送信に失敗しました（Gmail APIが利用できない可能性があります）"
             logs.append(error_msg)
