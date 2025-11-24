@@ -144,7 +144,7 @@ class EmailService:
 
     def send_email(self, to_address, subject, body, attachments=None):
         """
-        Sends or forwards an email using Gmail API.
+        Sends or forwards an email using Gmail API with attachments.
         """
         if self.service:
             try:
@@ -152,25 +152,39 @@ class EmailService:
                 message['to'] = to_address
                 message['subject'] = subject
                 
+                # Attach body
                 msg = MIMEText(body)
                 message.attach(msg)
                 
-                # Note: Real attachment handling would require reading the file content
-                # For now, we just send the text body
+                # Attach files
+                if attachments:
+                    for file_path in attachments:
+                        if file_path and os.path.exists(file_path):
+                            with open(file_path, 'rb') as f:
+                                part = MIMEBase('application', 'octet-stream')
+                                part.set_payload(f.read())
+                                encoders.encode_base64(part)
+                                part.add_header(
+                                    'Content-Disposition',
+                                    f'attachment; filename= {os.path.basename(file_path)}'
+                                )
+                                message.attach(part)
                 
-                raw = base64.urlsafe_b64decode(message.as_bytes()).decode()
+                # Encode and send
                 raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-                body = {'raw': raw}
+                body_data = {'raw': raw}
                 
-                self.service.users().messages().send(userId='me', body=body).execute()
-                print(f"Email sent to {to_address}")
-                return
+                self.service.users().messages().send(userId='me', body=body_data).execute()
+                print(f"Email sent to {to_address} with {len(attachments) if attachments else 0} attachments")
+                return True
             except Exception as e:
                 print(f"Error sending email: {e}")
+                return False
 
-        # Mock send
-        print(f"Sending email to {to_address}")
-        print(f"  Subject: {subject}")
-        print(f"  Body: {body}")
+        # Mock send (fallback when Gmail API is not available)
+        print(f"[MOCK] Sending email to {to_address}")
+        print(f"[MOCK]   Subject: {subject}")
+        print(f"[MOCK]   Body: {body}")
         if attachments:
-            print(f"  Attachments: {attachments}")
+            print(f"[MOCK]   Attachments: {attachments}")
+        return False
