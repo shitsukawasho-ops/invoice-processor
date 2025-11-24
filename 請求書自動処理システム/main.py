@@ -29,19 +29,39 @@ def process_single_email(email):
     notification_service = NotificationService()
     
     try:
-        # 1. Analyze Email
+        # 1. Download PDF first (if available)
+        pdf_paths = []
+        if email_service.has_pdf_attachment(email):
+            logs.append("添付ファイルからPDFを検出しました。")
+            pdf_paths = email_service.download_attachments(email['id'])
+            if pdf_paths:
+                logs.append(f"{len(pdf_paths)}個のPDFファイルをダウンロードしました。")
+        
+        # 2. Analyze Email with PDF
         logs.append("AIによるメール解析を開始...")
-        analysis_result = ai_service.analyze_email_body(email['body'])
+        print(f"[DEBUG] Email Body: {email['body']}")
+        analysis_result = ai_service.analyze_email_with_pdf(
+            email['body'],
+            pdf_paths[0] if pdf_paths else None
+        )
         logs.append(f"解析結果: {analysis_result}")
         
-        # 2. Identify Company & Forwarding Address
+        # 3. Identify Company & Forwarding Address
         logs.append("会社名の特定中...")
         company_name = analysis_result.get('company_name')
         
         if not company_name or company_name == "Unknown Company":
             error_msg = f"会社名を特定できませんでした"
             logs.append(error_msg)
-            notification_service.notify_slack("請求書処理エラー", {"Error": error_msg, "Email": email['subject']})
+            notification_service.notify_slack_with_file(
+                "請求書処理エラー - 会社名不明",
+                {
+                    "Error": error_msg,
+                    "Email": email['subject'],
+                    "Sender": email['sender']
+                },
+                file_path=pdf_paths[0] if pdf_paths else None
+            )
             return {"status": "error", "logs": logs}
              
         forwarding_address = master_data_service.get_forwarding_address(company_name)
@@ -49,34 +69,40 @@ def process_single_email(email):
         if not forwarding_address:
             error_msg = f"転送先が見つかりません: {company_name}"
             logs.append(error_msg)
-            notification_service.notify_slack("請求書処理エラー", {"Error": error_msg, "Email": email['subject']})
+            notification_service.notify_slack_with_file(
+                "請求書処理エラー - マスターデータ不一致",
+                {
+                    "Error": error_msg,
+                    "抽出した会社名": company_name,
+                    "Email": email['subject'],
+                    "Sender": email['sender']
+                },
+                file_path=pdf_paths[0] if pdf_paths else None
+            )
             return {"status": "error", "logs": logs}
             
         logs.append(f"転送先を特定: {forwarding_address} (会社名: {company_name})")
 
-        # 3. Download PDF
-        pdf_path = None
-        if email_service.has_pdf_attachment(email):
-            logs.append("添付ファイルからPDFを検出しました。")
-            # In a real app, we would download the attachment here
-            pass
-        elif analysis_result.get('url'):
+        # 4. Download PDF from URL if not already downloaded
+        if not pdf_paths and analysis_result.get('url'):
             logs.append(f"URLからPDFをダウンロード中: {analysis_result['url']}")
             pdf_path = browser_service.download_pdf_from_url(analysis_result['url'])
+            if pdf_path:
+                pdf_paths = [pdf_path]
         
-        if not pdf_path and not email_service.has_pdf_attachment(email):
+        if not pdf_paths:
             error_msg = "PDFが見つかりません (添付ファイルもURLもありません)"
             logs.append(error_msg)
             notification_service.notify_slack("請求書処理エラー", {"Error": error_msg, "Email": email['subject']})
             return {"status": "error", "logs": logs}
 
-        # 4. Send Email
+        # 5. Send Email
         logs.append(f"メールを送信中: {forwarding_address}")
         send_result = email_service.send_email(
             to_address=forwarding_address,
             subject=f"Fwd: {email['subject']}",
             body="請求書を転送します。",
-            attachments=[pdf_path] if pdf_path else None
+            attachments=pdf_paths if pdf_paths else None
         )
         
         logs.append(f"送信結果: {send_result}")

@@ -94,17 +94,9 @@ class EmailService:
                 subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "No Subject")
                 sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
                 
-                body = ""
-                if 'parts' in payload:
-                    for part in payload['parts']:
-                        if part['mimeType'] == 'text/plain':
-                            data = part['body'].get('data')
-                            if data:
-                                body += base64.urlsafe_b64decode(data).decode()
-                elif 'body' in payload:
-                    data = payload['body'].get('data')
-                    if data:
-                        body += base64.urlsafe_b64decode(data).decode()
+                body = self._extract_body(payload)
+                        
+
                         
                 # Attachments
                 attachments = []
@@ -127,6 +119,37 @@ class EmailService:
         
         # Fallback to mock
         return self._load_mock_emails()
+
+    def _extract_body(self, payload):
+        """
+        Recursively extracts the body from the email payload.
+        Prioritizes text/plain, then text/html.
+        """
+        body = ""
+        if 'parts' in payload:
+            for part in payload['parts']:
+                if part['mimeType'] == 'text/plain':
+                    data = part['body'].get('data')
+                    if data:
+                        return base64.urlsafe_b64decode(data).decode()
+            
+            # If no text/plain found in this level, check for nested parts
+            for part in payload['parts']:
+                if 'parts' in part:
+                    extracted = self._extract_body(part)
+                    if extracted:
+                        return extracted
+                elif part['mimeType'] == 'text/html':
+                     data = part['body'].get('data')
+                     if data:
+                         return base64.urlsafe_b64decode(data).decode()
+
+        elif 'body' in payload:
+            data = payload['body'].get('data')
+            if data:
+                return base64.urlsafe_b64decode(data).decode()
+        
+        return ""
     
     def _load_mock_emails(self):
         """Load emails from mock JSON file"""
@@ -145,6 +168,79 @@ class EmailService:
             if attachment.lower().endswith(".pdf"):
                 return True
         return False
+
+    def download_attachments(self, email_id, download_dir="downloads"):
+        """
+        Downloads all PDF attachments from an email.
+        Returns a list of file paths to the downloaded PDFs.
+        """
+        if not self.service:
+            print("[EmailService.download_attachments] Gmail service not available")
+            return []
+        
+        try:
+            # Create download directory if it doesn't exist
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+            
+            # Get the message with full payload
+            message = self.service.users().messages().get(
+                userId='me', 
+                id=email_id,
+                format='full'
+            ).execute()
+            
+            downloaded_files = []
+            payload = message['payload']
+            
+            # Check for attachments in parts
+            if 'parts' in payload:
+                for part in payload['parts']:
+                    self._download_part_attachments(part, email_id, download_dir, downloaded_files)
+            
+            print(f"[EmailService.download_attachments] Downloaded {len(downloaded_files)} PDF(s)")
+            return downloaded_files
+            
+        except Exception as e:
+            print(f"[EmailService.download_attachments] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _download_part_attachments(self, part, email_id, download_dir, downloaded_files):
+        """
+        Recursively download attachments from a message part.
+        """
+        filename = part.get('filename')
+        
+        # Check if this part has a PDF attachment
+        if filename and filename.lower().endswith('.pdf'):
+            attachment_id = part['body'].get('attachmentId')
+            
+            if attachment_id:
+                try:
+                    attachment = self.service.users().messages().attachments().get(
+                        userId='me',
+                        messageId=email_id,
+                        id=attachment_id
+                    ).execute()
+                    
+                    file_data = base64.urlsafe_b64decode(attachment['data'])
+                    file_path = os.path.join(download_dir, filename)
+                    
+                    with open(file_path, 'wb') as f:
+                        f.write(file_data)
+                    
+                    downloaded_files.append(file_path)
+                    print(f"[EmailService] Downloaded: {file_path}")
+                    
+                except Exception as e:
+                    print(f"[EmailService] Error downloading {filename}: {e}")
+        
+        # Recursively check nested parts
+        if 'parts' in part:
+            for subpart in part['parts']:
+                self._download_part_attachments(subpart, email_id, download_dir, downloaded_files)
 
     def send_email(self, to_address, subject, body, attachments=None):
         """
@@ -170,13 +266,18 @@ class EmailService:
                     for file_path in attachments:
                         if file_path and os.path.exists(file_path):
                             print(f"[EmailService.send_email] Attaching file: {file_path}")
+                            filename = os.path.basename(file_path)
                             with open(file_path, 'rb') as f:
-                                part = MIMEBase('application', 'octet-stream')
+                                # Use application/pdf for PDF files
+                                if filename.lower().endswith('.pdf'):
+                                    part = MIMEBase('application', 'pdf')
+                                else:
+                                    part = MIMEBase('application', 'octet-stream')
                                 part.set_payload(f.read())
                                 encoders.encode_base64(part)
                                 part.add_header(
                                     'Content-Disposition',
-                                    f'attachment; filename= {os.path.basename(file_path)}'
+                                    f'attachment; filename="{filename}"'
                                 )
                                 message.attach(part)
                         else:
