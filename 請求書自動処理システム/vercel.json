@@ -2,10 +2,6 @@
     "version": 2,
     "routes": [
         {
-            "src": "/api/cron/process-emails",
-            "dest": "api/cron/process-emails.py"
-        },
-        {
             "src": "/(.*)",
             "dest": "app.py"
         }
