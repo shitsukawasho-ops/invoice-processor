@@ -1,15 +1,18 @@
-from flask import request, jsonify
+from flask import Flask, request, jsonify
 import os
 from main import process_single_email
 from services.email_service import EmailService
 
-def handler(req):
+app = Flask(__name__)
+
+@app.route('/api/cron/process-emails', methods=['GET', 'POST'])
+def handler():
     """
     Vercel Cron handler for automatic email processing.
     Called every 10 minutes by Vercel Cron.
     """
     # Verify request is from Vercel Cron
-    auth_header = req.headers.get('Authorization', '')
+    auth_header = request.headers.get('Authorization', '')
     cron_secret = os.environ.get('CRON_SECRET', 'default-secret-change-me')
     
     if auth_header != f'Bearer {cron_secret}':
@@ -54,3 +57,7 @@ def handler(req):
             'status': 'error',
             'error': str(e)
         }), 500
+
+# For local testing
+if __name__ == '__main__':
+    app.run(port=3001)
