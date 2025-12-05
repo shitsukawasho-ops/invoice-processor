@@ -6,16 +6,10 @@ import {
   Send,
   Trash2,
   CheckCircle2,
-  XCircle,
   UserX,
   RefreshCw,
-  User,
   Loader2,
-  AlertTriangle,
-  Calendar,
-  Clock,
-  MapPin,
-  Radio
+  AlertTriangle
 } from "lucide-react";
 
 interface TaskActionsProps {
@@ -28,6 +22,7 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
   const [loading, setLoading] = useState(false);
   const [showRecruitDialog, setShowRecruitDialog] = useState(false);
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
   // マッチングキャンセル確認
   const handleCancelClick = () => {
@@ -83,8 +78,14 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
     router.refresh();
   };
 
-  const handleDelete = async () => {
-    if (!confirm("本当にこのタスクを削除しますか？この操作は取り消せません。")) return;
+  // 削除ダイアログを表示
+  const handleDeleteClick = () => {
+    setShowDeleteConfirmDialog(true);
+  };
+
+  // 削除実行
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirmDialog(false);
     setLoading(true);
     try {
       const res = await fetch(`/api/tasks/${task.id}`, {
@@ -171,6 +172,40 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
         </div>
       )}
 
+      {/* 削除確認ダイアログ */}
+      {showDeleteConfirmDialog && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 ring-8 ring-red-50/50">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">タスクを削除</h3>
+              <p className="text-slate-500 text-sm leading-relaxed">
+                本当にこのタスクを削除しますか？<br />
+                <span className="text-red-500 font-medium">この操作は取り消せません。</span>
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirmDialog(false)}
+                disabled={loading}
+                className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={loading}
+                className="flex-1 px-4 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "削除する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4 h-full flex flex-col">
         {isMatched ? (
           <div className="bg-green-50 border border-green-100 rounded-xl p-6 shadow-sm flex-grow flex flex-col justify-center items-center text-center">
@@ -193,7 +228,7 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
               </button>
 
               <button
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 disabled={loading}
                 className="w-full bg-white hover:bg-slate-50 text-slate-500 hover:text-red-600 font-bold py-3 px-4 rounded-lg border border-slate-200 hover:border-red-200 transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
@@ -230,7 +265,7 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
               </button>
 
               <button
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 disabled={loading}
                 className="w-full bg-white hover:bg-slate-50 text-slate-500 hover:text-red-600 font-bold py-3 px-4 rounded-lg border border-slate-200 hover:border-red-200 transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
@@ -244,3 +279,4 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
     </>
   );
 }
+

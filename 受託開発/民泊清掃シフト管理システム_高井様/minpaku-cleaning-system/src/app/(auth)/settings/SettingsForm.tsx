@@ -62,8 +62,10 @@ export default function SettingsForm() {
     setSettings((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/settings", {
@@ -72,9 +74,12 @@ export default function SettingsForm() {
         body: JSON.stringify(settings),
       });
 
-      if (!res.ok) throw new Error("Failed to save settings");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to save settings");
+      }
 
-      // 成功メッセージの代わりにトースト通知などが望ましいが、今回はアラートで代用
+      // 成功メッセージ
       alert("設定を保存しました");
       router.refresh();
     } catch (error) {
@@ -106,7 +111,8 @@ export default function SettingsForm() {
           </p>
         </div>
         <button
-          onClick={handleSubmit}
+          type="button"
+          onClick={() => handleSubmit()}
           disabled={saving}
           className="flex items-center gap-2 px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 shadow-lg shadow-slate-200 transition-all active:scale-95 disabled:opacity-50"
         >
