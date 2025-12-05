@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Account {
+  id          String   @id
+  username    String   @unique
+  name        String
+  iconUrl     String
+  followers   Int
+  following   Int
+  createdAt   DateTime
+  lastUpdated DateTime @default(now())
+  
+  tweets      Tweet[]
+  snapshots   Snapshot[]
+}
+
+model Tweet {
+  id          String   @id
+  accountId   String
+  text        String
+  mediaType   String   // "text", "image", "video", "link"
+  mediaUrl    String?
+  postedAt    DateTime
+  
+  // Metrics
+  likes       Int
+  reposts     Int
+  replies     Int
+  quotes      Int
+  impressions Int
+  
+  // Analysis
+  topics      String?  // JSON string or comma-separated
+  sentiment   String?
+  
+  account     Account  @relation(fields: [accountId], references: [id])
+}
+
+model Snapshot {
+  id          Int      @id @default(autoincrement())
+  accountId   String
+  followers   Int
+  recordedAt  DateTime @default(now())
+  
+  account     Account  @relation(fields: [accountId], references: [id])
+}

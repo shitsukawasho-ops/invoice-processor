@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 管理者テーブル
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// 物件テーブル
+model Property {
+  id                      String                    @id @default(cuid())
+  name                    String
+  address                 String
+  checkoutTime            String                    @default("11:00") // デフォルトチェックアウト時刻
+  cleaningDurationMinutes Int                       @default(120) // 清掃所要時間（分）
+  cleaningFee             Int                       @default(5000) // 清掃報酬（円）
+  isActive                Boolean                   @default(true)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  cleaningTasks           CleaningTask[]
+  staffAssignments        StaffPropertyAssignment[]
+}
+
+// 清掃スタッフテーブル
+model Staff {
+  id                 String                    @id @default(cuid())
+  name               String
+  lineUserId         String?                   @unique // LINE User ID
+  phone              String?
+  isActive           Boolean                   @default(true)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  propertyAssignments StaffPropertyAssignment[]
+  cleaningTasks      CleaningTask[]
+  notifications      NotificationQueue[]
+}
+
+// スタッフ-物件割当テーブル（多対多）
+model StaffPropertyAssignment {
+  id         String   @id @default(cuid())
+  staffId    String
+  propertyId String
+  createdAt  DateTime @default(now())
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, propertyId])
+}
+
+// 清掃タスクテーブル
+model CleaningTask {
+  id                    String              @id @default(cuid())
+  propertyId            String
+  staffId               String? // 担当スタッフ（確定時に設定）
+  cleaningDate          DateTime // 清掃予定日
+  checkoutTime          String // チェックアウト時刻
+  status                String              @default("pending") // pending, notifying, confirmed, completed, cancelled
+  externalReservationId String? // 外部予約ID（AirHost等）
+  guestCheckoutDate     DateTime? // ゲストチェックアウト日時
+  cleaningFee           Int // 清掃報酬
+  notificationSentAt    DateTime? // 通知送信日時
+  acceptedAt            DateTime? // スタッフ受諾日時
+  completedAt           DateTime? // 清掃完了日時
+  notes                 String? // 備考
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  property              Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  staff                 Staff?              @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  notifications         NotificationQueue[]
+
+  @@index([cleaningDate])
+  @@index([status])
+}
+
+// 通知キューテーブル
+model NotificationQueue {
+  id             String       @id @default(cuid())
+  cleaningTaskId String
+  staffId        String
+  status         String       @default("scheduled") // scheduled, pending, sent, accepted, declined, expired
+  scheduledAt    DateTime // 通知予定日時
+  sentAt         DateTime? // 実際の送信日時
+  respondedAt    DateTime? // 応答日時
+  lineMessageId  String? // LINE メッセージID
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  cleaningTask   CleaningTask @relation(fields: [cleaningTaskId], references: [id], onDelete: Cascade)
+  staff          Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+// システム設定テーブル
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
