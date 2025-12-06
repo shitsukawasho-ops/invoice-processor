@@ -24,6 +24,7 @@ model Organization {
   staff             Staff[]
   settings          Setting[]
   lineRegistrations LineRegistration[]
+  processedEmails   ProcessedEmail[]
 }
 
 // 管理者テーブル
@@ -162,4 +163,21 @@ model LineRegistration {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+}
+
+// 処理済みメール追跡テーブル
+model ProcessedEmail {
+  id             String       @id @default(cuid())
+  organizationId String
+  emailId        String       // Gmail Message ID
+  subject        String?
+  processedAt    DateTime     @default(now())
+  success        Boolean
+  taskId         String?      // 作成されたタスクID（成功時）
+  error          String?      // エラーメッセージ（失敗時）
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, emailId])
+  @@index([organizationId])
+  @@index([processedAt])
 }

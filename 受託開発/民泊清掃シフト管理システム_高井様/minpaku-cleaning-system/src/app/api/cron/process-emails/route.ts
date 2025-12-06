@@ -5,6 +5,9 @@ import { processReservationEmail } from "@/lib/email-parser";
 
 export const dynamic = "force-dynamic";
 
+// 1回の実行で処理する最大メール数
+const MAX_EMAILS_PER_RUN = 30;
+
 interface OrgGmailSettings {
     organizationId: string;
     clientId: string;
@@ -47,6 +50,52 @@ async function getAllOrgGmailSettings(): Promise<OrgGmailSettings[]> {
     return results;
 }
 
+// 処理済みメールかどうかをチェック
+async function isEmailAlreadyProcessed(organizationId: string, emailId: string): Promise<boolean> {
+    const existing = await prisma.processedEmail.findUnique({
+        where: {
+            organizationId_emailId: {
+                organizationId,
+                emailId,
+            },
+        },
+    });
+    return !!existing;
+}
+
+// 処理済みメールを記録
+async function recordProcessedEmail(
+    organizationId: string,
+    emailId: string,
+    subject: string,
+    success: boolean,
+    taskId?: string,
+    error?: string
+): Promise<void> {
+    await prisma.processedEmail.upsert({
+        where: {
+            organizationId_emailId: {
+                organizationId,
+                emailId,
+            },
+        },
+        update: {
+            success,
+            taskId,
+            error,
+            processedAt: new Date(),
+        },
+        create: {
+            organizationId,
+            emailId,
+            subject,
+            success,
+            taskId,
+            error,
+        },
+    });
+}
+
 export async function GET(request: NextRequest) {
     // Cron認証（Vercel Cron Job用）
     const authHeader = request.headers.get("authorization");
@@ -76,17 +125,19 @@ export async function GET(request: NextRequest) {
             success: boolean;
             taskId?: string;
             error?: string;
+            skipped?: boolean;
         }> = [];
 
         let totalProcessed = 0;
         let totalSuccess = 0;
+        let totalSkipped = 0;
 
         for (const settings of orgSettings) {
             console.log(`[CRON EMAIL] Processing org: ${settings.organizationId}`);
 
             try {
-                // その組織のGmail設定でメールを取得
-                const emails = await fetchUnreadReservationEmails(10, {
+                // その組織のGmail設定でメールを取得（最大30件）
+                const emails = await fetchUnreadReservationEmails(MAX_EMAILS_PER_RUN, {
                     clientId: settings.clientId,
                     clientSecret: settings.clientSecret,
                     refreshToken: settings.refreshToken,
@@ -95,6 +146,25 @@ export async function GET(request: NextRequest) {
                 console.log(`[CRON EMAIL] Org ${settings.organizationId}: Found ${emails.length} emails`);
 
                 for (const email of emails) {
+                    // 処理済みメールはスキップ
+                    const alreadyProcessed = await isEmailAlreadyProcessed(
+                        settings.organizationId,
+                        email.id
+                    );
+
+                    if (alreadyProcessed) {
+                        console.log(`[CRON EMAIL] Skipping already processed: ${email.subject}`);
+                        totalSkipped++;
+                        allResults.push({
+                            organizationId: settings.organizationId,
+                            emailId: email.id,
+                            subject: email.subject,
+                            success: false,
+                            skipped: true,
+                        });
+                        continue;
+                    }
+
                     console.log(`[CRON EMAIL] Processing: ${email.subject}`);
 
                     // メールを処理（組織IDを渡す）
@@ -103,6 +173,16 @@ export async function GET(request: NextRequest) {
                         email.body,
                         email.id,
                         settings.organizationId
+                    );
+
+                    // 処理結果をDBに記録
+                    await recordProcessedEmail(
+                        settings.organizationId,
+                        email.id,
+                        email.subject,
+                        result.success,
+                        result.taskId,
+                        result.error
                     );
 
                     allResults.push({
@@ -117,7 +197,6 @@ export async function GET(request: NextRequest) {
                     totalProcessed++;
                     if (result.success) {
                         totalSuccess++;
-                        // メールを既読にしない（ユーザー設定）
                     }
                 }
             } catch (orgError) {
@@ -125,7 +204,7 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        console.log(`[CRON EMAIL] Total: Processed ${totalSuccess}/${totalProcessed} emails successfully`);
+        console.log(`[CRON EMAIL] Total: Processed ${totalSuccess}/${totalProcessed} emails successfully, skipped ${totalSkipped}`);
 
         return NextResponse.json({
             success: true,
@@ -133,6 +212,7 @@ export async function GET(request: NextRequest) {
             organizationsProcessed: orgSettings.length,
             totalEmails: totalProcessed,
             successCount: totalSuccess,
+            skippedCount: totalSkipped,
             results: allResults,
         });
     } catch (error) {
@@ -143,3 +223,4 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
