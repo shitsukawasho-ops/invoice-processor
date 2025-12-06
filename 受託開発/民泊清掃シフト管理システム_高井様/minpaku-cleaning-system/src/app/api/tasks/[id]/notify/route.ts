@@ -51,7 +51,7 @@ export async function POST(
       cleaningDate: cleaningDateStr,
       checkoutTime: task.checkoutTime,
       cleaningFee: task.cleaningFee,
-    });
+    }, organizationId);
 
     if (messageId) {
       // 通知履歴を保存

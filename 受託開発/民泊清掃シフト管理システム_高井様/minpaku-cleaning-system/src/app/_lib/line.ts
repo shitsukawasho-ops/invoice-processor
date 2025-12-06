@@ -1,10 +1,11 @@
 import { Client, FlexMessage, FlexBubble, ClientConfig } from "@line/bot-sdk";
 import prisma from "@/lib/prisma";
 
-// データベースから設定を取得するヘルパー
-async function getLineSettings(): Promise<{ channelAccessToken: string; channelSecret: string }> {
+// データベースから設定を取得するヘルパー（組織ID必須）
+async function getLineSettings(organizationId: string): Promise<{ channelAccessToken: string; channelSecret: string }> {
     const settings = await prisma.setting.findMany({
         where: {
+            organizationId,
             key: {
                 in: ["line_channel_access_token", "line_channel_secret"],
             },
@@ -15,14 +16,14 @@ async function getLineSettings(): Promise<{ channelAccessToken: string; channelS
     const secretSetting = settings.find((s) => s.key === "line_channel_secret");
 
     return {
-        channelAccessToken: tokenSetting?.value || process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
-        channelSecret: secretSetting?.value || process.env.LINE_CHANNEL_SECRET || "",
+        channelAccessToken: tokenSetting?.value || "",
+        channelSecret: secretSetting?.value || "",
     };
 }
 
-// LINEクライアントを動的に生成
-export async function getLineClient(): Promise<Client> {
-    const settings = await getLineSettings();
+// LINEクライアントを動的に生成（組織ID必須）
+export async function getLineClient(organizationId: string): Promise<Client> {
+    const settings = await getLineSettings(organizationId);
     const config: ClientConfig = {
         channelAccessToken: settings.channelAccessToken,
         channelSecret: settings.channelSecret,
@@ -214,15 +215,13 @@ export function createCleaningRequestMessage(task: CleaningTaskInfo): FlexMessag
     return { type: "flex", altText: `清掃依頼: ${task.propertyName} (${task.cleaningDate})`, contents: bubble };
 }
 
-export async function sendCleaningRequest(lineUserId: string, task: CleaningTaskInfo): Promise<string | null> {
+export async function sendCleaningRequest(lineUserId: string, task: CleaningTaskInfo, organizationId: string): Promise<string | null> {
     try {
-        const client = await getLineClient();
+        const client = await getLineClient(organizationId);
         const message = createCleaningRequestMessage(task);
-        console.log(`[LINE] Sending cleaning request to ${lineUserId} for task ${task.taskId}`);
+        console.log(`[LINE] Sending cleaning request to ${lineUserId} for task ${task.taskId} (org: ${organizationId})`);
         const result = await client.pushMessage(lineUserId, message);
         console.log(`[LINE] Message sent successfully:`, result);
-        // LINE SDKの仕様上、pushMessageはメッセージIDを返さないため、成功時は適当なIDを返すかnullを返す
-        // ここではログ用にタイムスタンプベースのIDを生成して返す（DB保存用）
         return `msg-${Date.now()}`;
     } catch (error) {
         console.error("[LINE] Failed to send message:", error);
@@ -305,9 +304,9 @@ export function createConfirmationMessage(propertyName: string, cleaningDate: st
     return { type: "flex", altText: "清掃を受諾しました", contents: bubble };
 }
 
-export async function sendConfirmation(lineUserId: string, propertyName: string, cleaningDate: string): Promise<void> {
+export async function sendConfirmation(lineUserId: string, propertyName: string, cleaningDate: string, organizationId: string): Promise<void> {
     try {
-        const client = await getLineClient();
+        const client = await getLineClient(organizationId);
         const message = createConfirmationMessage(propertyName, cleaningDate);
         await client.pushMessage(lineUserId, message);
     } catch (error) {
@@ -315,10 +314,10 @@ export async function sendConfirmation(lineUserId: string, propertyName: string,
     }
 }
 
-// 設定のバリデーション用
-export async function validateLineSettings(): Promise<{ valid: boolean; error?: string }> {
+// 設定のバリデーション用（組織ID必須）
+export async function validateLineSettings(organizationId: string): Promise<{ valid: boolean; error?: string }> {
     try {
-        const settings = await getLineSettings();
+        const settings = await getLineSettings(organizationId);
         if (!settings.channelAccessToken) {
             return { valid: false, error: "Channel Access Tokenが設定されていません" };
         }
@@ -333,3 +332,4 @@ export async function validateLineSettings(): Promise<{ valid: boolean; error?: 
 
 // 設定を取得（外部からアクセス用）
 export { getLineSettings };
+

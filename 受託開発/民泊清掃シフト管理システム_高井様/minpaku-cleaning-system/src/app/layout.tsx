@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
+import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import SessionProvider from "@/components/providers/SessionProvider";
 
-const outfit = Outfit({
+const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
-  variable: "--font-outfit",
-  display: "swap",
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-jakarta",
+  variable: "--font-noto-sans-jp",
   display: "swap",
 });
 
@@ -28,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body
-        className={`${outfit.variable} ${jakarta.variable} font-sans antialiased bg-slate-50 text-slate-900`}
+        className={`${notoSansJP.variable} font-sans antialiased bg-slate-50 text-slate-900`}
       >
         <SessionProvider>{children}</SessionProvider>
       </body>

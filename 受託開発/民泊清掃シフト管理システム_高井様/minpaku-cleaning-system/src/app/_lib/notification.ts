@@ -28,14 +28,12 @@ export function getScheduledNotificationDate(cleaningDate: Date): Date {
 }
 
 /**
- * 物件を担当可能なスタッフを取得
- * 現在は全てのアクティブなLINE連携済みスタッフを対象とする
+ * 物件を担当可能なスタッフを取得（組織IDでフィルタ）
  */
-export async function getAvailableStaff(propertyId: string) {
-    // 全てのアクティブなLINE連携済みスタッフを取得
-    // （物件割当は将来的なフィルタリング用に残しておく）
+export async function getAvailableStaff(propertyId: string, organizationId: string) {
     return prisma.staff.findMany({
         where: {
+            organizationId,
             isActive: true,
             lineUserId: { not: null },
         },
@@ -57,11 +55,13 @@ export async function sendTaskNotifications(taskId: string): Promise<number> {
         return 0;
     }
 
+    const organizationId = task.property.organizationId;
+
     // 1ヶ月ルールチェック
     if (!shouldNotifyNow(task.cleaningDate)) {
         // 通知キューに追加（スケジュール）
         const scheduledAt = getScheduledNotificationDate(task.cleaningDate);
-        const availableStaff = await getAvailableStaff(task.propertyId);
+        const availableStaff = await getAvailableStaff(task.propertyId, organizationId);
 
         for (const staff of availableStaff) {
             await prisma.notificationQueue.upsert({
@@ -83,7 +83,7 @@ export async function sendTaskNotifications(taskId: string): Promise<number> {
     }
 
     // 即時通知
-    const availableStaff = await getAvailableStaff(task.propertyId);
+    const availableStaff = await getAvailableStaff(task.propertyId, organizationId);
     let sentCount = 0;
 
     for (const staff of availableStaff) {
@@ -98,7 +98,7 @@ export async function sendTaskNotifications(taskId: string): Promise<number> {
             cleaningDate: cleaningDateStr,
             checkoutTime: task.checkoutTime,
             cleaningFee: task.cleaningFee,
-        });
+        }, organizationId);
 
         if (messageId) {
             await prisma.notificationQueue.create({
@@ -150,6 +150,8 @@ export async function acceptTask(taskId: string, staffId: string): Promise<boole
         return false;
     }
 
+    const organizationId = task.property.organizationId;
+
     // タスクを更新
     await prisma.cleaningTask.update({
         where: { id: taskId },
@@ -184,10 +186,10 @@ export async function acceptTask(taskId: string, staffId: string): Promise<boole
         },
     });
 
-    // 確認メッセージを送信
+    // 確認メッセージを送信（組織IDを渡す）
     if (staff.lineUserId) {
         const cleaningDateStr = format(task.cleaningDate, "M月d日（E）", { locale: ja });
-        await sendConfirmation(staff.lineUserId, task.property.name, cleaningDateStr);
+        await sendConfirmation(staff.lineUserId, task.property.name, cleaningDateStr, organizationId);
     }
 
     return true;
@@ -248,6 +250,7 @@ export async function processScheduledNotifications(): Promise<number> {
 
         if (!staff.lineUserId) continue;
 
+        const organizationId = cleaningTask.property.organizationId;
         const cleaningDateStr = format(cleaningTask.cleaningDate, "M月d日（E）", { locale: ja });
 
         const messageId = await sendCleaningRequest(staff.lineUserId, {
@@ -257,7 +260,7 @@ export async function processScheduledNotifications(): Promise<number> {
             cleaningDate: cleaningDateStr,
             checkoutTime: cleaningTask.checkoutTime,
             cleaningFee: cleaningTask.cleaningFee,
-        });
+        }, organizationId);
 
         if (messageId) {
             await prisma.notificationQueue.update({
@@ -283,3 +286,4 @@ export async function processScheduledNotifications(): Promise<number> {
 
     return sentCount;
 }
+
