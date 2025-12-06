@@ -13,7 +13,8 @@ import {
   LogOut,
   Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  HelpCircle
 } from "lucide-react";
 
 const navigation = [
@@ -22,6 +23,7 @@ const navigation = [
   { name: "物件管理", href: "/properties", icon: Building2 },
   { name: "スタッフ管理", href: "/staff", icon: Users },
   { name: "設定", href: "/settings", icon: Settings },
+  { name: "ヘルプ", href: "/help", icon: HelpCircle },
 ];
 
 export default function Sidebar() {

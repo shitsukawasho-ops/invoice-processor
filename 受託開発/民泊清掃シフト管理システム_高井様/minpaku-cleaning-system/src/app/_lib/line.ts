@@ -21,7 +21,7 @@ async function getLineSettings(): Promise<{ channelAccessToken: string; channelS
 }
 
 // LINEクライアントを動的に生成
-async function getLineClient(): Promise<Client> {
+export async function getLineClient(): Promise<Client> {
     const settings = await getLineSettings();
     const config: ClientConfig = {
         channelAccessToken: settings.channelAccessToken,

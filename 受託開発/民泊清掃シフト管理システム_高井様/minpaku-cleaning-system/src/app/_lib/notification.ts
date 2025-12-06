@@ -29,17 +29,15 @@ export function getScheduledNotificationDate(cleaningDate: Date): Date {
 
 /**
  * 物件を担当可能なスタッフを取得
+ * 現在は全てのアクティブなLINE連携済みスタッフを対象とする
  */
 export async function getAvailableStaff(propertyId: string) {
+    // 全てのアクティブなLINE連携済みスタッフを取得
+    // （物件割当は将来的なフィルタリング用に残しておく）
     return prisma.staff.findMany({
         where: {
             isActive: true,
             lineUserId: { not: null },
-            propertyAssignments: {
-                some: {
-                    propertyId,
-                },
-            },
         },
     });
 }

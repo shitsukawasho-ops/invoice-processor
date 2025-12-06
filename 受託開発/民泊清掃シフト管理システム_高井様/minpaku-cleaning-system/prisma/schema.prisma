@@ -10,19 +10,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 組織（テナント）テーブル
+model Organization {
+  id        String   @id @default(cuid())
+  name      String   // 組織名
+  slug      String   @unique // URLスラッグ
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  admins            Admin[]
+  properties        Property[]
+  staff             Staff[]
+  settings          Setting[]
+  lineRegistrations LineRegistration[]
+}
+
 // 管理者テーブル
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String       @unique
+  passwordHash   String
+  name           String
+  isMaster       Boolean      @default(false) // マスターアカウント（全会社管理）
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 // 物件テーブル
 model Property {
   id                      String                    @id @default(cuid())
+  organizationId          String
   name                    String
   address                 String
   checkoutTime            String                    @default("11:00") // デフォルトチェックアウト時刻
@@ -31,22 +53,29 @@ model Property {
   isActive                Boolean                   @default(true)
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
+  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   cleaningTasks           CleaningTask[]
   staffAssignments        StaffPropertyAssignment[]
+
+  @@index([organizationId])
 }
 
 // 清掃スタッフテーブル
 model Staff {
-  id                 String                    @id @default(cuid())
-  name               String
-  lineUserId         String?                   @unique // LINE User ID
-  phone              String?
-  isActive           Boolean                   @default(true)
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
+  id                  String                    @id @default(cuid())
+  organizationId      String
+  name                String
+  lineUserId          String?                   @unique // LINE User ID
+  phone               String?
+  isActive            Boolean                   @default(true)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   propertyAssignments StaffPropertyAssignment[]
-  cleaningTasks      CleaningTask[]
-  notifications      NotificationQueue[]
+  cleaningTasks       CleaningTask[]
+  notifications       NotificationQueue[]
+
+  @@index([organizationId])
 }
 
 // スタッフ-物件割当テーブル（多対多）
@@ -107,9 +136,30 @@ model NotificationQueue {
 
 // システム設定テーブル
 model Setting {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  key            String
+  value          String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+}
+
+// LINE登録会話状態テーブル
+model LineRegistration {
+  id             String        @id @default(cuid())
+  organizationId String?
+  lineUserId     String        @unique // LINE User ID
+  state          String        @default("waiting_name") // waiting_name, waiting_reading, waiting_phone, completed
+  name           String? // 入力された名前
+  nameReading    String? // ふりがな
+  phone          String? // 電話番号
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }

@@ -86,7 +86,6 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               {status.label}
             </span>
           </div>
-          <p className="text-slate-500 text-sm mt-1 font-mono">{task.id}</p>
         </div>
       </div>
 

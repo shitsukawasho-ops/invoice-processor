@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
 import {
   Send,
   Trash2,
@@ -19,6 +20,7 @@ interface TaskActionsProps {
 
 export default function TaskActions({ task, candidateStaff }: TaskActionsProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showRecruitDialog, setShowRecruitDialog] = useState(false);
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
@@ -45,7 +47,7 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
       setShowRecruitDialog(true);
     } catch (error) {
       console.error(error);
-      alert("マッチングキャンセルに失敗しました");
+      showToast("マッチングキャンセルに失敗しました", "error");
     } finally {
       setLoading(false);
       router.refresh();
@@ -61,11 +63,11 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to send recruitment notifications");
-      alert("全スタッフに募集通知を送信しました");
+      showToast("全スタッフに募集通知を送信しました", "success");
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("募集通知の送信に失敗しました");
+      showToast("募集通知の送信に失敗しました", "error");
       router.refresh();
     } finally {
       setLoading(false);
@@ -95,7 +97,7 @@ export default function TaskActions({ task, candidateStaff }: TaskActionsProps) 
       router.push("/tasks");
     } catch (error) {
       console.error(error);
-      alert("タスクの削除に失敗しました");
+      showToast("タスクの削除に失敗しました", "error");
       setLoading(false);
     }
   };

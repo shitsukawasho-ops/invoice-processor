@@ -4,6 +4,19 @@ import { hash } from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  // デフォルト組織をまず確認/作成
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: "default" },
+    update: {},
+    create: {
+      id: "default-org",
+      name: "デフォルト組織",
+      slug: "default",
+    },
+  });
+
+  console.log("Created/found organization:", defaultOrg.name);
+
   // 管理者ユーザーの作成
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
@@ -16,6 +29,7 @@ async function main() {
       email: adminEmail,
       passwordHash,
       name: "管理者",
+      organizationId: defaultOrg.id,
     },
   });
 
@@ -28,6 +42,7 @@ async function main() {
       update: {},
       create: {
         id: "prop-1",
+        organizationId: defaultOrg.id,
         name: "サンシャインコンドミニアム 301号室",
         address: "東京都新宿区西新宿1-1-1",
         checkoutTime: "11:00",
@@ -40,6 +55,7 @@ async function main() {
       update: {},
       create: {
         id: "prop-2",
+        organizationId: defaultOrg.id,
         name: "レイクビューマンション 502号室",
         address: "東京都渋谷区代々木2-2-2",
         checkoutTime: "10:00",
@@ -52,6 +68,7 @@ async function main() {
       update: {},
       create: {
         id: "prop-3",
+        organizationId: defaultOrg.id,
         name: "グリーンハイツ 203号室",
         address: "東京都港区六本木3-3-3",
         checkoutTime: "11:00",
@@ -70,9 +87,10 @@ async function main() {
       update: {},
       create: {
         id: "staff-1",
+        organizationId: defaultOrg.id,
         name: "田中 花子",
         phone: "090-1234-5678",
-        lineUserId: null, // LINE連携後に設定
+        lineUserId: null,
       },
     }),
     prisma.staff.upsert({
@@ -80,6 +98,7 @@ async function main() {
       update: {},
       create: {
         id: "staff-2",
+        organizationId: defaultOrg.id,
         name: "佐藤 太郎",
         phone: "090-2345-6789",
         lineUserId: null,
@@ -90,6 +109,7 @@ async function main() {
       update: {},
       create: {
         id: "staff-3",
+        organizationId: defaultOrg.id,
         name: "鈴木 美咲",
         phone: "090-3456-7890",
         lineUserId: null,
@@ -102,21 +122,18 @@ async function main() {
   // スタッフと物件の割当
   await prisma.staffPropertyAssignment.deleteMany({});
   await Promise.all([
-    // 田中さん: 物件1, 2を担当
     prisma.staffPropertyAssignment.create({
       data: { staffId: "staff-1", propertyId: "prop-1" },
     }),
     prisma.staffPropertyAssignment.create({
       data: { staffId: "staff-1", propertyId: "prop-2" },
     }),
-    // 佐藤さん: 物件2, 3を担当
     prisma.staffPropertyAssignment.create({
       data: { staffId: "staff-2", propertyId: "prop-2" },
     }),
     prisma.staffPropertyAssignment.create({
       data: { staffId: "staff-2", propertyId: "prop-3" },
     }),
-    // 鈴木さん: 全物件担当
     prisma.staffPropertyAssignment.create({
       data: { staffId: "staff-3", propertyId: "prop-1" },
     }),
@@ -133,7 +150,6 @@ async function main() {
   // サンプル清掃タスクの作成
   const today = new Date();
   const tasks = await Promise.all([
-    // 今日のタスク（確定済み）
     prisma.cleaningTask.upsert({
       where: { id: "task-1" },
       update: {},
@@ -149,7 +165,6 @@ async function main() {
         acceptedAt: new Date(today.getTime() - 23 * 60 * 60 * 1000),
       },
     }),
-    // 明日のタスク（打診中）
     prisma.cleaningTask.upsert({
       where: { id: "task-2" },
       update: {},
@@ -163,7 +178,6 @@ async function main() {
         notificationSentAt: new Date(),
       },
     }),
-    // 3日後のタスク（未割当）
     prisma.cleaningTask.upsert({
       where: { id: "task-3" },
       update: {},
@@ -176,7 +190,6 @@ async function main() {
         cleaningFee: 4000,
       },
     }),
-    // 1週間後のタスク（未割当）
     prisma.cleaningTask.upsert({
       where: { id: "task-4" },
       update: {},

@@ -9,7 +9,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   const properties = await prisma.property.findMany({
+    where: { organizationId },
     include: {
       _count: {
         select: {
@@ -30,6 +33,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
     const body = await request.json();
     const { name, address, checkoutTime, cleaningDurationMinutes, cleaningFee } = body;
@@ -43,6 +48,7 @@ export async function POST(request: NextRequest) {
 
     const property = await prisma.property.create({
       data: {
+        organizationId,
         name,
         address,
         checkoutTime: checkoutTime || "11:00",

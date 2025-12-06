@@ -10,7 +10,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   const tasks = await prisma.cleaningTask.findMany({
+    where: {
+      property: { organizationId },
+    },
     include: {
       property: true,
       staff: true,
@@ -27,6 +32,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
     const body = await request.json();
     const { propertyId, cleaningDate, checkoutTime, cleaningFee, notes, staffId } = body;
@@ -38,9 +45,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 物件の情報を取得してデフォルト値を設定
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
+    // 物件の情報を取得してデフォルト値を設定（組織チェック）
+    const property = await prisma.property.findFirst({
+      where: { id: propertyId, organizationId },
     });
 
     if (!property) {
@@ -65,13 +72,11 @@ export async function POST(request: NextRequest) {
     });
 
     // スタッフが割り当てられていない場合のみ自動通知を実行
-    // (1ヶ月ルールに基づき、担当可能なスタッフ全員に通知)
     if (!staffId) {
       try {
         const sentCount = await sendTaskNotifications(task.id);
         console.log(`[AUTO NOTIFY] Task ${task.id}: sent ${sentCount} notifications`);
       } catch (notifyError) {
-        // 通知に失敗してもタスク作成自体は成功とする
         console.error("[AUTO NOTIFY] Failed to send notifications:", notifyError);
       }
     }
@@ -85,4 +90,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

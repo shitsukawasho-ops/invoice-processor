@@ -12,9 +12,12 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
-  const property = await prisma.property.findUnique({
-    where: { id },
+
+  // 組織チェックを含めて物件を取得（IDOR対策）
+  const property = await prisma.property.findFirst({
+    where: { id, organizationId },
     include: {
       staffAssignments: {
         include: {
@@ -40,7 +43,18 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
+
+  // 組織チェック（IDOR対策）
+  const existing = await prisma.property.findFirst({
+    where: { id, organizationId },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "物件が見つかりません" }, { status: 404 });
+  }
+
   try {
     const body = await request.json();
     const { name, address, checkoutTime, cleaningDurationMinutes, cleaningFee, isActive } = body;
@@ -76,7 +90,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
+
+  // 組織チェック（IDOR対策）
+  const existing = await prisma.property.findFirst({
+    where: { id, organizationId },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "物件が見つかりません" }, { status: 404 });
+  }
+
   try {
     await prisma.property.delete({
       where: { id },
@@ -91,3 +116,4 @@ export async function DELETE(
     );
   }
 }
+

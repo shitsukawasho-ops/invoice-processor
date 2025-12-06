@@ -15,11 +15,16 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
 
   try {
-    const task = await prisma.cleaningTask.findUnique({
-      where: { id },
+    // 組織チェック含む（IDOR対策）
+    const task = await prisma.cleaningTask.findFirst({
+      where: {
+        id,
+        property: { organizationId }
+      },
       include: {
         property: true,
         staff: true,

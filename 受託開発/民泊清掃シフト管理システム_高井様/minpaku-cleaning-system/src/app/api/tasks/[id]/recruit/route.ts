@@ -16,12 +16,17 @@ export async function POST(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const organizationId = session.user.organizationId;
+
     try {
         const { id: taskId } = await params;
 
-        // タスクの存在確認
-        const task = await prisma.cleaningTask.findUnique({
-            where: { id: taskId },
+        // タスクの存在確認（組織チェック含む - IDOR対策）
+        const task = await prisma.cleaningTask.findFirst({
+            where: {
+                id: taskId,
+                property: { organizationId }
+            },
             include: { property: true },
         });
 

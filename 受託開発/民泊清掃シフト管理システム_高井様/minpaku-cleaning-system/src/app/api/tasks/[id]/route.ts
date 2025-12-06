@@ -12,9 +12,15 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
-  const task = await prisma.cleaningTask.findUnique({
-    where: { id },
+
+  // 組織チェックを含めてタスクを取得（IDOR対策）
+  const task = await prisma.cleaningTask.findFirst({
+    where: {
+      id,
+      property: { organizationId }  // 組織チェック
+    },
     include: {
       property: true,
       staff: true,
@@ -43,13 +49,24 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
+
+  // 組織チェック（IDOR対策）
+  const existing = await prisma.cleaningTask.findFirst({
+    where: { id, property: { organizationId } },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "タスクが見つかりません" }, { status: 404 });
+  }
+
   try {
     const body = await request.json();
     const { cleaningDate, checkoutTime, cleaningFee, notes, staffId, status } = body;
 
     const updateData: Record<string, unknown> = {};
-    
+
     if (cleaningDate !== undefined) updateData.cleaningDate = new Date(cleaningDate);
     if (checkoutTime !== undefined) updateData.checkoutTime = checkoutTime;
     if (cleaningFee !== undefined) updateData.cleaningFee = cleaningFee;
@@ -96,7 +113,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
   const { id } = await params;
+
+  // 組織チェック（IDOR対策）
+  const existing = await prisma.cleaningTask.findFirst({
+    where: { id, property: { organizationId } },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "タスクが見つかりません" }, { status: 404 });
+  }
+
   try {
     await prisma.cleaningTask.delete({
       where: { id },

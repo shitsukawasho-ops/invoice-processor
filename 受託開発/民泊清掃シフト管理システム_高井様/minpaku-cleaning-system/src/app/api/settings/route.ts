@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 
 // 設定キーの定義
 const SETTING_KEYS = {
+  LINE_CHANNEL_ID: "line_channel_id",
   LINE_CHANNEL_ACCESS_TOKEN: "line_channel_access_token",
   LINE_CHANNEL_SECRET: "line_channel_secret",
   GMAIL_CLIENT_ID: "gmail_client_id",
@@ -22,7 +23,11 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const settings = await prisma.setting.findMany();
+  const organizationId = session.user.organizationId;
+
+  const settings = await prisma.setting.findMany({
+    where: { organizationId },
+  });
 
   // キーと値のオブジェクトに変換（機密情報はマスク）
   const settingsMap: Record<string, string> = {};
@@ -55,32 +60,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
     const body = await request.json();
-
-    // 複数設定の一括保存に対応
-    // body が { key, value } 形式の場合は単一保存
-    // body が { line_channel_access_token: "...", ... } 形式の場合は一括保存
-    if (body.key && typeof body.value === "string") {
-      // 単一設定の保存（レガシー対応）
-      const { key, value } = body;
-      if (!VALID_KEYS.includes(key)) {
-        return NextResponse.json({ error: "無効な設定キーです" }, { status: 400 });
-      }
-
-      if (!value || value.trim() === "") {
-        await prisma.setting.deleteMany({ where: { key } });
-        return NextResponse.json({ success: true, deleted: true });
-      }
-
-      const setting = await prisma.setting.upsert({
-        where: { key },
-        update: { value },
-        create: { key, value },
-      });
-
-      return NextResponse.json({ success: true, setting: { key: setting.key } });
-    }
 
     // 一括保存
     const savedKeys: string[] = [];
@@ -98,13 +81,15 @@ export async function POST(request: NextRequest) {
 
       if (strValue.trim() === "") {
         // 空文字の場合は削除
-        await prisma.setting.deleteMany({ where: { key } });
+        await prisma.setting.deleteMany({ where: { organizationId, key } });
       } else {
-        // upsert で作成または更新
+        // upsert で作成または更新（organizationId + key でユニーク）
         await prisma.setting.upsert({
-          where: { key },
+          where: {
+            organizationId_key: { organizationId, key }
+          },
           update: { value: strValue },
-          create: { key, value: strValue },
+          create: { organizationId, key, value: strValue },
         });
         savedKeys.push(key);
       }
@@ -119,4 +104,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

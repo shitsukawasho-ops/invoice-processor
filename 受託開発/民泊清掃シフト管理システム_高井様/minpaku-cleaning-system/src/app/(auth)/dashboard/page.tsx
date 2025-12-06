@@ -2,6 +2,9 @@ import prisma from "@/lib/prisma";
 import { format, startOfDay, endOfDay, addDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import {
   Calendar,
   CheckCircle2,
@@ -14,7 +17,7 @@ import {
   TrendingUp
 } from "lucide-react";
 
-async function getDashboardData() {
+async function getDashboardData(organizationId: string) {
   const today = new Date();
   const startOfToday = startOfDay(today);
   const endOfNextWeek = endOfDay(addDays(today, 7));
@@ -30,6 +33,7 @@ async function getDashboardData() {
   ] = await Promise.all([
     prisma.cleaningTask.findMany({
       where: {
+        property: { organizationId },
         cleaningDate: {
           gte: startOfToday,
           lte: endOfDay(today),
@@ -43,6 +47,7 @@ async function getDashboardData() {
     }),
     prisma.cleaningTask.findMany({
       where: {
+        property: { organizationId },
         cleaningDate: {
           gt: endOfDay(today),
           lte: endOfNextWeek,
@@ -54,11 +59,11 @@ async function getDashboardData() {
       },
       orderBy: { cleaningDate: "asc" },
     }),
-    prisma.cleaningTask.count({ where: { status: "pending" } }),
-    prisma.cleaningTask.count({ where: { status: "notifying" } }),
-    prisma.cleaningTask.count({ where: { status: "confirmed" } }),
-    prisma.property.count({ where: { isActive: true } }),
-    prisma.staff.count({ where: { isActive: true } }),
+    prisma.cleaningTask.count({ where: { property: { organizationId }, status: "pending" } }),
+    prisma.cleaningTask.count({ where: { property: { organizationId }, status: "notifying" } }),
+    prisma.cleaningTask.count({ where: { property: { organizationId }, status: "confirmed" } }),
+    prisma.property.count({ where: { organizationId, isActive: true } }),
+    prisma.staff.count({ where: { organizationId, isActive: true } }),
   ]);
 
   return {
@@ -83,7 +88,13 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
 };
 
 export default async function DashboardPage() {
-  const { todayTasks, upcomingTasks, stats } = await getDashboardData();
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const organizationId = session.user.organizationId;
+  const { todayTasks, upcomingTasks, stats } = await getDashboardData(organizationId);
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto animate-fade-in">
