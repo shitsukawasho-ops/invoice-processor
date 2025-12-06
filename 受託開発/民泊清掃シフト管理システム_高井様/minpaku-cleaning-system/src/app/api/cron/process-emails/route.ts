@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { fetchUnreadReservationEmails, markAsRead } from "@/lib/gmail";
+import { fetchUnreadReservationEmails } from "@/lib/gmail";
 import { processReservationEmail } from "@/lib/email-parser";
 
 export const dynamic = "force-dynamic";
@@ -117,12 +117,7 @@ export async function GET(request: NextRequest) {
                     totalProcessed++;
                     if (result.success) {
                         totalSuccess++;
-                        // 処理したメールを既読に
-                        await markAsRead(email.id, {
-                            clientId: settings.clientId,
-                            clientSecret: settings.clientSecret,
-                            refreshToken: settings.refreshToken,
-                        });
+                        // メールを既読にしない（ユーザー設定）
                     }
                 }
             } catch (orgError) {
