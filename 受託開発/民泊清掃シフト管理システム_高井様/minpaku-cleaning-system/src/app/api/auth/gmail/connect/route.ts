@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ローカル環境かどうかを判定してリダイレクトURIを設定
-    const baseUrl = process.env.NEXTAUTH_URL || request.nextUrl.origin;
+    const baseUrl = (process.env.NEXTAUTH_URL || request.nextUrl.origin).trim();
     const redirectUri = `${baseUrl}/api/auth/gmail/callback`;
 
     // state パラメータに組織IDを含める（CSRF対策も兼ねる）
