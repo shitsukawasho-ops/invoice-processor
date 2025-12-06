@@ -7,17 +7,20 @@ import { authOptions } from "@/lib/auth";
 
 async function getProperties() {
   const session = await getServerSession(authOptions);
+
   if (!session?.user?.organizationId) {
     return [];
   }
 
-  return prisma.property.findMany({
+  const properties = await prisma.property.findMany({
     where: {
       isActive: true,
       organizationId: session.user.organizationId
     },
     orderBy: { name: "asc" },
   });
+
+  return properties;
 }
 
 export default async function NewStaffPage() {
