@@ -25,6 +25,7 @@ interface SettingsState {
   gmail_client_secret: string;
   gmail_refresh_token: string;
   gmail_target_email: string;
+  gmail_connected_email: string;
   gemini_api_key: string;
 }
 
@@ -36,6 +37,7 @@ interface HasSettings {
   gmail_client_secret: boolean;
   gmail_refresh_token: boolean;
   gmail_target_email: boolean;
+  gmail_connected_email: boolean;
   gemini_api_key: boolean;
 }
 
@@ -52,6 +54,7 @@ export default function SettingsForm() {
     gmail_client_secret: "",
     gmail_refresh_token: "",
     gmail_target_email: "",
+    gmail_connected_email: "",
     gemini_api_key: "",
   });
   const [hasSettings, setHasSettings] = useState<HasSettings>({
@@ -62,6 +65,7 @@ export default function SettingsForm() {
     gmail_client_secret: false,
     gmail_refresh_token: false,
     gmail_target_email: false,
+    gmail_connected_email: false,
     gemini_api_key: false,
   });
 
@@ -269,73 +273,83 @@ export default function SettingsForm() {
                 <Mail className="w-6 h-6 text-red-500" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-800">Gmail API設定</h2>
+                <h2 className="text-lg font-bold text-slate-800">Gmail連携</h2>
                 <p className="text-sm text-slate-500">予約メールの受信と解析に使用します</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <SettingStatus isSet={hasSettings.gmail_client_id && hasSettings.gmail_refresh_token} />
+              <SettingStatus isSet={hasSettings.gmail_refresh_token} />
             </div>
           </div>
           <div className="p-8 space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-bold text-slate-700">クライアントID</label>
-                  <SettingStatus isSet={hasSettings.gmail_client_id} />
+            {hasSettings.gmail_refresh_token ? (
+              // 連携済み表示
+              <div className="space-y-4">
+                <div className="bg-emerald-50 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                    <div>
+                      <p className="font-bold text-emerald-800">Gmailと連携中</p>
+                      {settings.gmail_connected_email && (
+                        <p className="text-sm text-emerald-600">{settings.gmail_connected_email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm("Gmail連携を解除しますか？")) return;
+                      try {
+                        const res = await fetch("/api/auth/gmail/disconnect", { method: "POST" });
+                        if (res.ok) {
+                          showToast("Gmail連携を解除しました", "success");
+                          router.refresh();
+                          window.location.reload();
+                        } else {
+                          showToast("解除に失敗しました", "error");
+                        }
+                      } catch {
+                        showToast("エラーが発生しました", "error");
+                      }
+                    }}
+                    className="px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    連携解除
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  name="gmail_client_id"
-                  value={settings.gmail_client_id}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-mono text-sm"
-                  placeholder={hasSettings.gmail_client_id ? "新しい値を入力して更新" : "クライアントIDを入力"}
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-bold text-slate-700">クライアントシークレット</label>
-                  <SettingStatus isSet={hasSettings.gmail_client_secret} />
+                <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
+                  <p>連携済みのGoogleアカウントのメールボックスから予約メールを自動取得します。</p>
                 </div>
-                <input
-                  type="password"
-                  name="gmail_client_secret"
-                  value={settings.gmail_client_secret}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-mono text-sm"
-                  placeholder={hasSettings.gmail_client_secret ? "新しい値を入力して更新" : "クライアントシークレットを入力"}
-                />
               </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-bold text-slate-700">リフレッシュトークン</label>
-                <SettingStatus isSet={hasSettings.gmail_refresh_token} />
+            ) : (
+              // 未連携表示
+              <div className="space-y-4">
+                <div className="text-center py-8">
+                  <Mail className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-600 mb-6">Gmailと連携することで、予約メールを自動的に取得できます</p>
+                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                  <a
+                    href="/api/auth/gmail/connect"
+                    className="inline-flex items-center gap-3 px-6 py-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Googleアカウントで連携
+                  </a>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-4 flex items-start gap-3 text-sm text-amber-800">
+                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-1">Gmailへのアクセス許可が必要です</p>
+                    <p>連携するとこのアプリがGmailの読み取りとラベル管理の権限を取得します。</p>
+                  </div>
+                </div>
               </div>
-              <input
-                type="password"
-                name="gmail_refresh_token"
-                value={settings.gmail_refresh_token}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-mono text-sm"
-                placeholder={hasSettings.gmail_refresh_token ? "新しい値を入力して更新" : "リフレッシュトークンを入力"}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-bold text-slate-700">監視対象メールアドレス</label>
-                <SettingStatus isSet={hasSettings.gmail_target_email} />
-              </div>
-              <input
-                type="email"
-                name="gmail_target_email"
-                value={settings.gmail_target_email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
-                placeholder="例: reservation@example.com"
-              />
-            </div>
+            )}
           </div>
         </div>
 
