@@ -63,14 +63,12 @@ async function isEmailAlreadyProcessed(organizationId: string, emailId: string):
     return !!existing;
 }
 
-// 処理済みメールを記録
+// 処理済みメールを記録（メール内容は保存しない）
 async function recordProcessedEmail(
     organizationId: string,
     emailId: string,
-    subject: string,
     success: boolean,
-    taskId?: string,
-    error?: string
+    taskId?: string
 ): Promise<void> {
     await prisma.processedEmail.upsert({
         where: {
@@ -82,16 +80,13 @@ async function recordProcessedEmail(
         update: {
             success,
             taskId,
-            error,
             processedAt: new Date(),
         },
         create: {
             organizationId,
             emailId,
-            subject,
             success,
             taskId,
-            error,
         },
     });
 }
@@ -175,14 +170,12 @@ export async function GET(request: NextRequest) {
                         settings.organizationId
                     );
 
-                    // 処理結果をDBに記録
+                    // 処理結果をDBに記録（メール内容は保存しない）
                     await recordProcessedEmail(
                         settings.organizationId,
                         email.id,
-                        email.subject,
                         result.success,
-                        result.taskId,
-                        result.error
+                        result.taskId
                     );
 
                     allResults.push({

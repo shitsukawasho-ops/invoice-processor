@@ -165,19 +165,18 @@ model LineRegistration {
   @@index([organizationId])
 }
 
-// 処理済みメール追跡テーブル
+// 処理済みメール追跡テーブル（重複防止用・メール内容は保存しない）
 model ProcessedEmail {
   id             String       @id @default(cuid())
   organizationId String
-  emailId        String       // Gmail Message ID
-  subject        String?
+  emailId        String       // Gmail Message ID（重複防止用）
   processedAt    DateTime     @default(now())
   success        Boolean
   taskId         String?      // 作成されたタスクID（成功時）
-  error          String?      // エラーメッセージ（失敗時）
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, emailId])
   @@index([organizationId])
   @@index([processedAt])
 }
+
