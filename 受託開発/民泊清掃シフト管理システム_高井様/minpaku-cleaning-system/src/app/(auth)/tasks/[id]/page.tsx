@@ -17,9 +17,22 @@ import {
   Building2
 } from "lucide-react";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
 async function getTask(id: string) {
-  const task = await prisma.cleaningTask.findUnique({
-    where: { id },
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    return null;
+  }
+
+  const task = await prisma.cleaningTask.findFirst({
+    where: {
+      id,
+      property: {
+        organizationId: session.user.organizationId
+      }
+    },
     include: {
       property: true,
       staff: true,
@@ -35,6 +48,7 @@ async function getTask(id: string) {
   const candidateStaff = await prisma.staff.findMany({
     where: {
       isActive: true,
+      organizationId: session.user.organizationId,
       propertyAssignments: {
         some: {
           propertyId: task.propertyId,

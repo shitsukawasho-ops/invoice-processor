@@ -2,9 +2,20 @@ import prisma from "@/lib/prisma";
 import NewStaffForm from "./NewStaffForm";
 import { UserPlus } from "lucide-react";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
 async function getProperties() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    return [];
+  }
+
   return prisma.property.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      organizationId: session.user.organizationId
+    },
     orderBy: { name: "asc" },
   });
 }

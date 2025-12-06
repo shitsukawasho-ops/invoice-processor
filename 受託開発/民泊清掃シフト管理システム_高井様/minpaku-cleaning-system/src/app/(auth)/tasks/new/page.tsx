@@ -2,16 +2,35 @@ import prisma from "@/lib/prisma";
 import NewTaskForm from "./NewTaskForm";
 import { Plus } from "lucide-react";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
 async function getProperties() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    return [];
+  }
+
   return prisma.property.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      organizationId: session.user.organizationId
+    },
     orderBy: { name: "asc" },
   });
 }
 
 async function getStaff() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.organizationId) {
+    return [];
+  }
+
   return prisma.staff.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      organizationId: session.user.organizationId
+    },
     include: {
       propertyAssignments: true,
     },
