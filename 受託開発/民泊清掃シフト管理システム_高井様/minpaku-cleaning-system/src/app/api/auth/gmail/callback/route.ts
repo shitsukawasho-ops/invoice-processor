@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL || request.nextUrl.origin;
+    const baseUrl = (process.env.NEXTAUTH_URL || request.nextUrl.origin).trim();
     const redirectUri = `${baseUrl}/api/auth/gmail/callback`;
 
     try {

@@ -12,6 +12,7 @@ const SETTING_KEYS = {
   GMAIL_CLIENT_SECRET: "gmail_client_secret",
   GMAIL_REFRESH_TOKEN: "gmail_refresh_token",
   GMAIL_TARGET_EMAIL: "gmail_target_email",
+  GMAIL_CONNECTED_EMAIL: "gmail_connected_email",
   GEMINI_API_KEY: "gemini_api_key",
 } as const;
 
