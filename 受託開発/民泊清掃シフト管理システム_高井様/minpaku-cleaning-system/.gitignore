@@ -48,3 +48,4 @@ next-env.d.ts
 # SQLite database files (development)
 prisma/*.db
 prisma/*.db-journal
+.env.pulled
