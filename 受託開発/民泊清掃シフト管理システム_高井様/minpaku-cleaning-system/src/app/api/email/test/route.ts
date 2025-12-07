@@ -38,7 +38,12 @@ export async function POST(request: NextRequest) {
 
         console.log("[EMAIL TEST] Processing test email:", emailSubject);
 
-        const result = await processReservationEmail(emailSubject, emailContent, "test-" + Date.now());
+        const result = await processReservationEmail(
+            emailSubject,
+            emailContent,
+            "test-" + Date.now(),
+            session.user.organizationId
+        );
 
         return NextResponse.json({
             success: result.success,

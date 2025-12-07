@@ -64,6 +64,15 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    // タイムスタンプ検証（5分以内）- リプレイ攻撃対策
+    const STATE_EXPIRY_MS = 5 * 60 * 1000; // 5分
+    if (Date.now() - stateData.timestamp > STATE_EXPIRY_MS) {
+        console.error("[GMAIL OAuth] State expired");
+        return NextResponse.redirect(
+            new URL("/settings?error=state_expired", request.url)
+        );
+    }
+
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 

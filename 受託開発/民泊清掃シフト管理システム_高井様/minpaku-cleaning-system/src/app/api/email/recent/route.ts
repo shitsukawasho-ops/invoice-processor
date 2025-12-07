@@ -86,7 +86,7 @@ export async function GET() {
             const errorText = await listResponse.text();
             console.error("[GMAIL] List messages failed:", errorText);
             return NextResponse.json(
-                { error: "メール一覧の取得に失敗しました", details: errorText },
+                { error: "メール一覧の取得に失敗しました" },
                 { status: 500 }
             );
         }
