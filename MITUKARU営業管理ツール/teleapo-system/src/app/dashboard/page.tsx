@@ -1,21 +1,24 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/utils/auth';
 import Layout from '@/components/Layout';
-import db from '@/lib/db';
-import { TrendingUp, TrendingDown, Phone, Calendar, CheckCircle, XCircle } from 'lucide-react';
+import pool from '@/utils/db';
+import { TrendingUp, TrendingDown, Phone, Calendar, CheckCircle, Users, Briefcase, Target } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const DashboardCharts = dynamic(() => import('./DashboardCharts'), { ssr: false });
 
-interface Budget {
-  target_calls: number;
-  target_appointments: number;
-  target_contracts: number;
+interface KPISettings {
+  target_hires: number;
+  cr_ap_rate: number;
+  mtg_ap_rate: number;
+  contract_mtg_rate: number;
+  job_contract_rate: number;
+  hire_job_rate: number;
+  revenue_per_hire: number;
+  cost_per_call: number;
   fixed_cost: number;
-  cpa: number;
-  revenue_per_contract: number;
-  target_profit_rate: number;
+  variable_cost: number;
 }
 
 interface CallStats {
@@ -27,6 +30,20 @@ interface CallStats {
 interface UserStats {
   user_calls: number;
   user_appointments: number;
+}
+
+// Calculate targets from KPI settings (same logic as simulator)
+function calculateTargets(settings: KPISettings) {
+  const toDecimal = (rate: number) => Math.max(rate, 0.01) / 100;
+
+  const targetHires = settings.target_hires;
+  const jobRequests = Math.ceil(targetHires / toDecimal(settings.hire_job_rate));
+  const contracts = Math.ceil(jobRequests / toDecimal(settings.job_contract_rate));
+  const meetings = Math.ceil(contracts / toDecimal(settings.contract_mtg_rate));
+  const appointments = Math.ceil(meetings / toDecimal(settings.mtg_ap_rate));
+  const calls = Math.ceil(appointments / toDecimal(settings.cr_ap_rate));
+
+  return { targetHires, jobRequests, contracts, meetings, appointments, calls };
 }
 
 export default async function DashboardPage() {
@@ -46,82 +63,119 @@ export default async function DashboardPage() {
   const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
   const today = now.toISOString().split('T')[0];
 
-  // Get budget settings
-  const budget = db.prepare(`
-    SELECT * FROM budgets WHERE year = ? AND month = ?
-  `).get(year, month) as Budget | undefined;
+  // Get KPI settings
+  const { rows: kpiRows } = await pool.query<KPISettings>(`
+    SELECT * FROM kpi_settings WHERE year = $1 AND month = $2
+  `, [year, month]);
+  const kpiSettings = kpiRows[0];
+
+  // Default settings if none exist
+  const settings: KPISettings = kpiSettings || {
+    target_hires: 33,
+    cr_ap_rate: 1.0,
+    mtg_ap_rate: 95.0,
+    contract_mtg_rate: 50.0,
+    job_contract_rate: 80.0,
+    hire_job_rate: 80.0,
+    revenue_per_hire: 70000,
+    cost_per_call: 105,
+    fixed_cost: 0,
+    variable_cost: 0,
+  };
+
+  // Calculate targets from KPI settings
+  const targets = calculateTargets(settings);
 
   // Get monthly call stats
-  const monthStats = db.prepare(`
+  const { rows: monthStatsRows } = await pool.query<CallStats>(`
     SELECT 
-      COUNT(*) as total_calls,
-      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END) as appointments,
-      (SELECT COUNT(*) FROM customers WHERE status = 'contracted' AND updated_at >= ?) as contracts
+      COUNT(*)::int as total_calls,
+      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END)::int as appointments,
+      (SELECT COUNT(*) FROM customers WHERE status = 'contracted' AND updated_at >= $1)::int as contracts
     FROM call_logs
-    WHERE created_at >= ?
-  `).get(startOfMonth, startOfMonth) as CallStats;
+    WHERE created_at >= $2
+  `, [startOfMonth, startOfMonth]);
+  const monthStats = monthStatsRows[0];
 
   // Get user-specific stats
-  const userStats = db.prepare(`
+  const { rows: userStatsRows } = await pool.query<UserStats>(`
     SELECT 
-      COUNT(*) as user_calls,
-      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END) as user_appointments
+      COUNT(*)::int as user_calls,
+      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END)::int as user_appointments
     FROM call_logs
-    WHERE user_id = ? AND DATE(created_at) = ?
-  `).get(userId, today) as UserStats;
+    WHERE user_id = $1 AND DATE(created_at) = $2
+  `, [userId, today]);
+  const userStats = userStatsRows[0] || { user_calls: 0, user_appointments: 0 };
 
   // Get today's list count for user
-  const todayListCount = db.prepare(`
-    SELECT COUNT(*) as count FROM customers 
-    WHERE assigned_to = ? 
-    AND (next_action_date = ? OR (next_action_date IS NULL AND status = 'new'))
-  `).get(userId, today) as { count: number };
+  const { rows: todayListCountRows } = await pool.query<{ count: number }>(`
+    SELECT COUNT(*)::int as count FROM customers 
+    WHERE assigned_to = $1 
+    AND (next_action_date = $2 OR (next_action_date IS NULL AND status = 'new'))
+  `, [userId, today]);
+  const todayListCount = todayListCountRows[0] || { count: 0 };
 
-  const targetCalls = budget?.target_calls || 500;
-  const targetAppointments = budget?.target_appointments || 50;
-  const targetContracts = budget?.target_contracts || 10;
+  // Progress calculations using KPI-based targets
+  // 達成率 = 実績 / 目標 × 100
+  const callProgress = Math.round((monthStats.total_calls / targets.calls) * 100);
+  const appointmentProgress = Math.round((monthStats.appointments / targets.appointments) * 100);
+  const contractProgress = Math.round((monthStats.contracts / targets.contracts) * 100);
 
-  const callProgress = Math.round((monthStats.total_calls / targetCalls) * 100);
-  const appointmentProgress = Math.round((monthStats.appointments / targetAppointments) * 100);
-  const contractProgress = Math.round((monthStats.contracts / targetContracts) * 100);
+  // 進捗率 = 実績 / 理想（目標 × 時間経過率）× 100
+  // 理想 = 目標 × (経過稼働日 / 総稼働日)
+  // → 進捗率 = (実績 / 目標) / (経過稼働日 / 総稼働日) × 100
+  const calculateProgressRate = (actual: number, target: number, elapsedDays: number, totalDays: number) => {
+    if (elapsedDays === 0 || totalDays === 0) return 0;
+    const idealValue = target * (elapsedDays / totalDays);
+    return Math.round((actual / idealValue) * 100);
+  };
+
+  // Actual conversion rate
+  const actualAppoRate = monthStats.total_calls > 0
+    ? (monthStats.appointments / monthStats.total_calls) * 100
+    : 0;
 
   // PL calculations
-  const revenue = monthStats.contracts * (budget?.revenue_per_contract || 500000);
-  const variableCost = monthStats.total_calls * (budget?.cpa || 5000);
-  const totalCost = (budget?.fixed_cost || 1000000) + variableCost;
+  const revenue = monthStats.contracts * settings.revenue_per_hire;
+  const callCost = monthStats.total_calls * settings.cost_per_call;
+  const totalCost = settings.fixed_cost + callCost + settings.variable_cost;
   const profit = revenue - totalCost;
   const profitRate = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+
+  // Target revenue/profit from KPI settings
+  const targetRevenue = settings.target_hires * settings.revenue_per_hire;
+  const targetCallCost = targets.calls * settings.cost_per_call;
+  const targetTotalCost = settings.fixed_cost + targetCallCost + settings.variable_cost;
+  const targetProfit = targetRevenue - targetTotalCost;
 
   // Get daily stats for the last 30 days
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(now.getDate() - 30);
   const thirtyDaysAgoStr = `${thirtyDaysAgo.getFullYear()}-${String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(thirtyDaysAgo.getDate()).padStart(2, '0')}`;
 
-  const dailyData = db.prepare(`
+  const { rows: dailyData } = await pool.query<{ date: string; calls: number; appointments: number }>(`
     SELECT 
       DATE(created_at) as date,
-      COUNT(*) as calls,
-      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END) as appointments
+      COUNT(*)::int as calls,
+      SUM(CASE WHEN result = 'appointed' THEN 1 ELSE 0 END)::int as appointments
     FROM call_logs
-    WHERE created_at >= ?
+    WHERE created_at >= $1
     GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `).all(thirtyDaysAgoStr) as { date: string; calls: number; appointments: number }[];
+  `, [thirtyDaysAgoStr]);
 
   // Fill in missing dates
   const dailyStats = [];
-  // Create a new date object to avoid modifying thirtyDaysAgo
   const currentDate = new Date(thirtyDaysAgo);
-  // Reset time to avoid infinite loops or comparison issues
   currentDate.setHours(0, 0, 0, 0);
   const endDate = new Date(now);
   endDate.setHours(0, 0, 0, 0);
 
   while (currentDate <= endDate) {
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const d = String(currentDate.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
 
     const found = dailyData.find(item => item.date === dateStr);
     dailyStats.push({
@@ -134,20 +188,18 @@ export default async function DashboardPage() {
   }
 
   // Get result distribution
-  const resultData = db.prepare(`
-    SELECT result, COUNT(*) as count
+  const { rows: resultData } = await pool.query<{ result: string; count: number }>(`
+    SELECT result, COUNT(*)::int as count
     FROM call_logs
-    WHERE created_at >= ?
+    WHERE created_at >= $1
     GROUP BY result
-  `).all(startOfMonth) as { result: string; count: number }[];
+  `, [startOfMonth]);
 
   const resultLabelMap: Record<string, string> = {
     appointed: 'アポイント',
-    completed: '完了',
-    no_answer: '不通',
-    callback: '掛け直し',
-    rejected: 'NG',
-    error: 'エラー'
+    unreachable: '不通',
+    callback: '折り返し',
+    ng: 'NG',
   };
 
   const resultStats = resultData.map(item => ({
@@ -155,11 +207,50 @@ export default async function DashboardPage() {
     value: item.count
   })).sort((a, b) => b.value - a.value);
 
+  // Calculate business days (excluding weekends)
+  const getBusinessDays = (startDate: Date, endDate: Date) => {
+    let count = 0;
+    const curDate = new Date(startDate.getTime());
+    while (curDate <= endDate) {
+      const dayOfWeek = curDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+      curDate.setDate(curDate.getDate() + 1);
+    }
+    return count;
+  };
+
+  const startOfCurrentMonth = new Date(year, month - 1, 1);
+  const endOfCurrentMonth = new Date(year, month, 0);
+  const totalBusinessDays = getBusinessDays(startOfCurrentMonth, endOfCurrentMonth);
+
+  // Current business day (up to today)
+  // If today is past the end of the month (viewing past month), use total days
+  // If today is before start of month (future), use 0
+  let currentBusinessDay = 0;
+  const nowTime = now.getTime();
+
+  if (nowTime > endOfCurrentMonth.getTime()) {
+    currentBusinessDay = totalBusinessDays;
+  } else if (nowTime >= startOfCurrentMonth.getTime()) {
+    currentBusinessDay = getBusinessDays(startOfCurrentMonth, now);
+  }
+
+  const timeProgress = totalBusinessDays > 0
+    ? Math.round((currentBusinessDay / totalBusinessDays) * 100)
+    : 0;
+
   return (
     <Layout>
       <div className="page-header">
         <h1 className="page-title">ダッシュボード</h1>
-        <p className="page-subtitle">{year}年{month}月の実績</p>
+        <div className="page-header-meta">
+          <p className="page-subtitle">{year}年{month}月の実績</p>
+          <div className="business-day-info">
+            <span className="business-day-label">稼働日経過:</span>
+            <span className="business-day-value">{currentBusinessDay}/{totalBusinessDays}日</span>
+            <span className="business-day-progress">({timeProgress}%)</span>
+          </div>
+        </div>
       </div>
 
       {/* Today's Progress for Users */}
@@ -183,120 +274,213 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Monthly KPIs */}
-      <div className="stats-grid" style={{ marginBottom: '2rem' }}>
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Phone size={20} style={{ color: 'var(--color-primary)' }} />
-            <span className="card-title" style={{ marginBottom: 0 }}>架電数</span>
+      {/* Monthly KPIs - Based on KPI Settings */}
+      <div className="dashboard-grid">
+        <div className="dashboard-card kpi-card">
+          <div className="card-header">
+            <div className="icon-wrapper icon-primary">
+              <Phone size={24} />
+            </div>
+            <div className="card-title-wrapper">
+              <span className="card-label">架電数</span>
+              <span className="card-sublabel">Monthly Calls</span>
+            </div>
           </div>
-          <div className="card-value">{monthStats.total_calls}</div>
-          <div className="progress" style={{ marginTop: '0.75rem' }}>
-            <div
-              className={`progress-bar ${callProgress >= 100 ? 'success' : callProgress >= 50 ? '' : 'warning'}`}
-              style={{ width: `${Math.min(callProgress, 100)}%` }}
-            />
-          </div>
-          <div className="card-change" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>目標: {targetCalls}</span>
-            <span>{callProgress}%</span>
-          </div>
-        </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Calendar size={20} style={{ color: 'var(--color-secondary)' }} />
-            <span className="card-title" style={{ marginBottom: 0 }}>アポ数</span>
-          </div>
-          <div className="card-value">{monthStats.appointments}</div>
-          <div className="progress" style={{ marginTop: '0.75rem' }}>
-            <div
-              className={`progress-bar ${appointmentProgress >= 100 ? 'success' : appointmentProgress >= 50 ? '' : 'warning'}`}
-              style={{ width: `${Math.min(appointmentProgress, 100)}%` }}
-            />
-          </div>
-          <div className="card-change" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>目標: {targetAppointments}</span>
-            <span>{appointmentProgress}%</span>
-          </div>
-        </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <CheckCircle size={20} style={{ color: 'var(--color-primary-dark)' }} />
-            <span className="card-title" style={{ marginBottom: 0 }}>成約数</span>
-          </div>
-          <div className="card-value">{monthStats.contracts}</div>
-          <div className="progress" style={{ marginTop: '0.75rem' }}>
-            <div
-              className={`progress-bar ${contractProgress >= 100 ? 'success' : contractProgress >= 50 ? '' : 'warning'}`}
-              style={{ width: `${Math.min(contractProgress, 100)}%` }}
-            />
-          </div>
-          <div className="card-change" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>目標: {targetContracts}</span>
-            <span>{contractProgress}%</span>
+          <div className="card-content">
+            <div className="card-main-value">{monthStats.total_calls.toLocaleString()}</div>
+            <div className="progress-container">
+              <div className="progress-info">
+                <span className="progress-label">目標: {targets.calls.toLocaleString()}</span>
+                <div className="progress-stats">
+                  <span className={`progress-rate ${calculateProgressRate(monthStats.total_calls, targets.calls, currentBusinessDay, totalBusinessDays) >= 100 ? 'text-success' : 'text-danger'}`}>
+                    進捗率: {calculateProgressRate(monthStats.total_calls, targets.calls, currentBusinessDay, totalBusinessDays)}%
+                  </span>
+                  <span className="progress-separator">/</span>
+                  <span className="progress-percent">達成率: {callProgress}%</span>
+                </div>
+              </div>
+              <div className="progress-bar-bg">
+                <div
+                  className={`progress-bar-fill ${callProgress >= 100 ? 'success' : calculateProgressRate(monthStats.total_calls, targets.calls, currentBusinessDay, totalBusinessDays) >= 100 ? 'primary' : 'warning'}`}
+                  style={{ width: `${Math.min(callProgress, 100)}%` }}
+                />
+                <div
+                  className="progress-marker"
+                  style={{ left: `${Math.min(timeProgress, 100)}%` }}
+                  title={`期間経過: ${timeProgress}%`}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <XCircle size={20} style={{ color: 'var(--color-warning)' }} />
-            <span className="card-title" style={{ marginBottom: 0 }}>アポ率</span>
+        <div className="dashboard-card kpi-card">
+          <div className="card-header">
+            <div className="icon-wrapper icon-secondary">
+              <Calendar size={24} />
+            </div>
+            <div className="card-title-wrapper">
+              <span className="card-label">アポ数</span>
+              <span className="card-sublabel">Appointments</span>
+            </div>
           </div>
-          <div className="card-value">
-            {monthStats.total_calls > 0
-              ? Math.round((monthStats.appointments / monthStats.total_calls) * 100)
-              : 0}%
+          <div className="card-content">
+            <div className="card-main-value">{monthStats.appointments}</div>
+            <div className="progress-container">
+              <div className="progress-info">
+                <span className="progress-label">目標: {targets.appointments}</span>
+                <div className="progress-stats">
+                  <span className={`progress-rate ${calculateProgressRate(monthStats.appointments, targets.appointments, currentBusinessDay, totalBusinessDays) >= 100 ? 'text-success' : 'text-danger'}`}>
+                    進捗率: {calculateProgressRate(monthStats.appointments, targets.appointments, currentBusinessDay, totalBusinessDays)}%
+                  </span>
+                  <span className="progress-separator">/</span>
+                  <span className="progress-percent">達成率: {appointmentProgress}%</span>
+                </div>
+              </div>
+              <div className="progress-bar-bg">
+                <div
+                  className={`progress-bar-fill ${appointmentProgress >= 100 ? 'success' : calculateProgressRate(monthStats.appointments, targets.appointments, currentBusinessDay, totalBusinessDays) >= 100 ? 'secondary' : 'warning'}`}
+                  style={{ width: `${Math.min(appointmentProgress, 100)}%` }}
+                />
+                <div
+                  className="progress-marker"
+                  style={{ left: `${Math.min(timeProgress, 100)}%` }}
+                  title={`期間経過: ${timeProgress}%`}
+                />
+              </div>
+            </div>
           </div>
-          <div className="card-change" style={{ marginTop: '0.75rem' }}>
-            CPA: ¥{monthStats.appointments > 0 ? Math.round(variableCost / monthStats.appointments).toLocaleString() : '-'}
+        </div>
+
+        <div className="dashboard-card kpi-card">
+          <div className="card-header">
+            <div className="icon-wrapper icon-accent">
+              <CheckCircle size={24} />
+            </div>
+            <div className="card-title-wrapper">
+              <span className="card-label">契約数</span>
+              <span className="card-sublabel">Contracts</span>
+            </div>
+          </div>
+          <div className="card-content">
+            <div className="card-main-value">{monthStats.contracts}</div>
+            <div className="progress-container">
+              <div className="progress-info">
+                <span className="progress-label">目標: {targets.contracts}</span>
+                <div className="progress-stats">
+                  <span className={`progress-rate ${calculateProgressRate(monthStats.contracts, targets.contracts, currentBusinessDay, totalBusinessDays) >= 100 ? 'text-success' : 'text-danger'}`}>
+                    進捗率: {calculateProgressRate(monthStats.contracts, targets.contracts, currentBusinessDay, totalBusinessDays)}%
+                  </span>
+                  <span className="progress-separator">/</span>
+                  <span className="progress-percent">達成率: {contractProgress}%</span>
+                </div>
+              </div>
+              <div className="progress-bar-bg">
+                <div
+                  className={`progress-bar-fill ${contractProgress >= 100 ? 'success' : calculateProgressRate(monthStats.contracts, targets.contracts, currentBusinessDay, totalBusinessDays) >= 100 ? 'accent' : 'warning'}`}
+                  style={{ width: `${Math.min(contractProgress, 100)}%` }}
+                />
+                <div
+                  className="progress-marker"
+                  style={{ left: `${Math.min(timeProgress, 100)}%` }}
+                  title={`期間経過: ${timeProgress}%`}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-card kpi-card">
+          <div className="card-header">
+            <div className="icon-wrapper icon-warning">
+              <Target size={24} />
+            </div>
+            <div className="card-title-wrapper">
+              <span className="card-label">アポ率</span>
+              <span className="card-sublabel">Conversion Rate</span>
+            </div>
+          </div>
+          <div className="card-content">
+            <div className="card-main-value">{actualAppoRate.toFixed(2)}<span className="unit">%</span></div>
+            <div className="kpi-status-badge" style={{
+              backgroundColor: actualAppoRate >= settings.cr_ap_rate ? 'var(--color-bg-success)' : 'var(--color-bg-danger)',
+              color: actualAppoRate >= settings.cr_ap_rate ? 'var(--color-success)' : 'var(--color-danger)'
+            }}>
+              {actualAppoRate >= settings.cr_ap_rate ? '目標達成' : '未達'} (目標 {settings.cr_ap_rate}%)
+            </div>
           </div>
         </div>
       </div>
 
       {/* Charts Section */}
-      <DashboardCharts dailyStats={dailyStats} resultStats={resultStats} />
+      <div className="dashboard-section">
+        <DashboardCharts dailyStats={dailyStats} resultStats={resultStats} />
+      </div>
 
       {/* PL Summary - Admin Only */}
       {isAdmin && (
-        <>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', marginTop: '2rem' }}>予実管理 (PL)</h2>
-          <div className="pl-summary">
-            <div className="pl-card revenue">
-              <div className="card-title">売上</div>
-              <div className="card-value" style={{ color: 'var(--color-secondary)' }}>
-                ¥{revenue.toLocaleString()}
+        <div className="dashboard-section">
+          <h2 className="section-title">
+            <Briefcase size={20} />
+            予実管理 (PL)
+          </h2>
+          <div className="pl-summary-card dashboard-card">
+            <div className="pl-visual-container">
+              <div className="pl-visual-row">
+                <div className="pl-visual-label">
+                  <span className="label-main">売上</span>
+                  <span className="label-sub">Revenue</span>
+                </div>
+                <div className="pl-visual-bar-track">
+                  <div className="pl-visual-bar revenue-bar" style={{ width: '100%' }}>
+                    ¥{revenue.toLocaleString()}
+                  </div>
+                </div>
+                <div className="pl-visual-target">
+                  目標: ¥{targetRevenue.toLocaleString()}
+                </div>
               </div>
-              <div className="card-change positive">
-                <TrendingUp size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                成約 {monthStats.contracts}件 × ¥{(budget?.revenue_per_contract || 500000).toLocaleString()}
+
+              <div className="pl-visual-row">
+                <div className="pl-visual-label">
+                  <span className="label-main">コスト</span>
+                  <span className="label-sub">Cost</span>
+                </div>
+                <div className="pl-visual-bar-track">
+                  <div className="pl-visual-bar cost-bar" style={{ width: `${Math.min((totalCost / Math.max(revenue, 1)) * 100, 100)}%` }}>
+                    ¥{totalCost.toLocaleString()}
+                  </div>
+                </div>
+                <div className="pl-visual-details">
+                  (架電: ¥{callCost.toLocaleString()} / 固定: ¥{settings.fixed_cost.toLocaleString()})
+                </div>
               </div>
             </div>
 
-            <div className="pl-card cost">
-              <div className="card-title">コスト</div>
-              <div className="card-value" style={{ color: 'var(--color-danger)' }}>
-                ¥{totalCost.toLocaleString()}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-                <div>固定費: ¥{(budget?.fixed_cost || 1000000).toLocaleString()}</div>
-                <div>変動費: ¥{variableCost.toLocaleString()}</div>
-              </div>
-            </div>
+            <div className="pl-divider"></div>
 
-            <div className="pl-card profit">
-              <div className="card-title">営業利益</div>
-              <div className="card-value" style={{ color: profit >= 0 ? 'var(--color-primary)' : 'var(--color-danger)' }}>
-                ¥{profit.toLocaleString()}
+            <div className="pl-profit-container">
+              <div className="pl-profit-item">
+                <div className="profit-label">営業利益</div>
+                <div className={`profit-value ${profit >= 0 ? 'positive' : 'negative'}`}>
+                  ¥{profit.toLocaleString()}
+                </div>
               </div>
-              <div className={`card-change ${profit >= 0 ? 'positive' : 'negative'}`}>
-                {profit >= 0 ? <TrendingUp size={16} style={{ display: 'inline', marginRight: '0.25rem' }} /> : <TrendingDown size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />}
-                利益率 {profitRate}% (目標: {budget?.target_profit_rate || 20}%)
+              <div className="pl-profit-item">
+                <div className="profit-label">利益率</div>
+                <div className={`profit-value ${profitRate >= 0 ? 'positive' : 'negative'}`}>
+                  {profitRate}%
+                </div>
+              </div>
+              <div className="pl-profit-item">
+                <div className="profit-label">目標利益</div>
+                <div className="profit-value neutral">
+                  ¥{targetProfit.toLocaleString()}
+                </div>
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </Layout>
   );

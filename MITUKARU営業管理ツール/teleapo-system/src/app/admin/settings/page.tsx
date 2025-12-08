@@ -1,44 +1,51 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/utils/auth';
 import Layout from '@/components/Layout';
-import db from '@/lib/db';
-import BudgetSettings from './BudgetSettings';
+import pool from '@/utils/db';
+import KPISimulator from './KPISimulator';
 
-interface Budget {
+interface KPISettings {
   id: number;
   year: number;
   month: number;
-  target_calls: number;
-  target_appointments: number;
-  target_contracts: number;
+  target_hires: number;
+  cr_ap_rate: number;
+  mtg_ap_rate: number;
+  contract_mtg_rate: number;
+  job_contract_rate: number;
+  hire_job_rate: number;
+  revenue_per_hire: number;
+  cost_per_call: number;
   fixed_cost: number;
-  cpa: number;
-  revenue_per_contract: number;
-  target_profit_rate: number;
+  variable_cost: number;
 }
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user?.role !== 'admin') {
     redirect('/dashboard');
   }
 
   const now = new Date();
-  const currentBudget = db.prepare(`
-    SELECT * FROM budgets WHERE year = ? AND month = ?
-  `).get(now.getFullYear(), now.getMonth() + 1) as Budget | undefined;
+  const { rows } = await pool.query(
+    `SELECT * FROM kpi_settings WHERE year = $1 AND month = $2`,
+    [now.getFullYear(), now.getMonth() + 1]
+  );
+  const currentSettings = rows[0] as KPISettings | undefined;
 
   return (
     <Layout>
       <div className="page-header">
-        <h1 className="page-title">予算・係数設定</h1>
-        <p className="page-subtitle">月次目標とPL計算の基準値を設定</p>
+        <div>
+          <h1 className="page-title">KPI目標逆算シミュレーター</h1>
+          <p className="page-subtitle">目標採用人数から必要な行動量と収支を自動算出</p>
+        </div>
       </div>
-      
-      <BudgetSettings 
-        initialBudget={currentBudget}
+
+      <KPISimulator
+        initialSettings={currentSettings || null}
         year={now.getFullYear()}
         month={now.getMonth() + 1}
       />

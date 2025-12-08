@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/utils/auth';
 import bcrypt from 'bcryptjs';
-import db from '@/lib/db';
+import pool from '@/utils/db';
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -14,8 +14,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const resolvedParams = await params;
     const userId = parseInt(resolvedParams.id);
-    
-    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -25,7 +25,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -33,19 +33,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const resolvedParams = await params;
     const userId = parseInt(resolvedParams.id);
-    const { password, name, role } = await request.json();
+    const { password, name, role, daily_quota } = await request.json();
 
     if (password) {
       const passwordHash = bcrypt.hashSync(password, 10);
-      db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(passwordHash, userId);
+      await pool.query('UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [passwordHash, userId]);
     }
 
     if (name) {
-      db.prepare('UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(name, userId);
+      await pool.query('UPDATE users SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [name, userId]);
     }
 
     if (role) {
-      db.prepare('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(role, userId);
+      await pool.query('UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [role, userId]);
+    }
+
+    if (daily_quota !== undefined) {
+      await pool.query('UPDATE users SET daily_quota = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [daily_quota, userId]);
     }
 
     return NextResponse.json({ success: true });

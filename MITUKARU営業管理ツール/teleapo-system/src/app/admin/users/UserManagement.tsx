@@ -2,14 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, KeyRound, UserCog } from 'lucide-react';
+import { Plus, Trash2, KeyRound, UserCog, RefreshCw, Users } from 'lucide-react';
 
 interface User {
   id: number;
   email: string;
   name: string;
   role: string;
+  daily_quota: number;
   created_at: string;
+}
+
+interface AssignmentStats {
+  users: Array<{
+    id: number;
+    name: string;
+    daily_quota: number;
+    assigned_count: number;
+    today_count: number;
+  }>;
+  unassignedCount: number;
 }
 
 interface UserManagementProps {
@@ -21,11 +33,15 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
   const [users, setUsers] = useState(initialUsers);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignmentResult, setAssignmentResult] = useState<string | null>(null);
+  const [editingQuota, setEditingQuota] = useState<{ id: number; value: number } | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     name: '',
     password: '',
     role: 'user',
+    daily_quota: 50,
   });
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -42,7 +58,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
       if (response.ok) {
         const newUser = await response.json();
         setUsers([...users, newUser]);
-        setFormData({ email: '', name: '', password: '', role: 'user' });
+        setFormData({ email: '', name: '', password: '', role: 'user', daily_quota: 50 });
         setShowForm(false);
         router.refresh();
       }
@@ -85,17 +101,91 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
     }
   };
 
+  const handleQuotaChange = async (userId: number, newQuota: number) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ daily_quota: newQuota }),
+      });
+
+      if (response.ok) {
+        setUsers(users.map(u => u.id === userId ? { ...u, daily_quota: newQuota } : u));
+        setEditingQuota(null);
+      }
+    } catch (error) {
+      console.error('Error updating quota:', error);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!confirm('未割当のリストを各ユーザーに割り当てますか？')) return;
+
+    setAssigning(true);
+    setAssignmentResult(null);
+
+    try {
+      const response = await fetch('/api/assign', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const details = data.results
+          .filter((r: { newlyAssigned: number }) => r.newlyAssigned > 0)
+          .map((r: { userName: string; newlyAssigned: number }) => `${r.userName}: ${r.newlyAssigned}件`)
+          .join('、');
+
+        setAssignmentResult(
+          `✅ ${data.totalAssigned}件を割り当てました。${details ? `(${details})` : ''} 残り未割当: ${data.remainingUnassigned}件`
+        );
+      } else {
+        setAssignmentResult(`❌ ${data.message}`);
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error('Error assigning:', error);
+      setAssignmentResult('❌ 割り当て処理中にエラーが発生しました');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   return (
     <>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <button 
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <button
           className="btn btn-primary"
           onClick={() => setShowForm(!showForm)}
         >
           <Plus size={16} />
           新規ユーザー作成
         </button>
+        <button
+          className="btn btn-secondary"
+          onClick={handleAssign}
+          disabled={assigning}
+        >
+          <RefreshCw size={16} className={assigning ? 'spin' : ''} />
+          {assigning ? '割り当て中...' : 'リストを割り当て'}
+        </button>
       </div>
+
+      {assignmentResult && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            background: assignmentResult.startsWith('✅') ? '#d1fae5' : '#fee2e2',
+            border: 'none'
+          }}
+        >
+          {assignmentResult}
+        </div>
+      )}
 
       {showForm && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -143,6 +233,17 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                   <option value="admin">管理者</option>
                 </select>
               </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">1日の割当数</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={formData.daily_quota}
+                  onChange={(e) => setFormData({ ...formData, daily_quota: parseInt(e.target.value) || 50 })}
+                  min="1"
+                  max="500"
+                />
+              </div>
             </div>
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
               <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -164,6 +265,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                 <th>名前</th>
                 <th>メールアドレス</th>
                 <th>権限</th>
+                <th>1日の割当数</th>
                 <th>作成日</th>
                 <th>操作</th>
               </tr>
@@ -182,6 +284,51 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                     <span className={`badge ${user.role === 'admin' ? 'badge-appointed' : 'badge-new'}`}>
                       {user.role === 'admin' ? '管理者' : '一般'}
                     </span>
+                  </td>
+                  <td>
+                    {editingQuota?.id === user.id ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="number"
+                          className="form-input"
+                          style={{ width: '80px', padding: '0.25rem 0.5rem' }}
+                          value={editingQuota.value}
+                          onChange={(e) => setEditingQuota({ id: user.id, value: parseInt(e.target.value) || 0 })}
+                          min="1"
+                          max="500"
+                          autoFocus
+                        />
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleQuotaChange(user.id, editingQuota.value)}
+                        >
+                          保存
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => setEditingQuota(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <span
+                        style={{
+                          cursor: user.role !== 'admin' ? 'pointer' : 'default',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          background: user.role !== 'admin' ? 'var(--color-bg-secondary)' : 'transparent'
+                        }}
+                        onClick={() => {
+                          if (user.role !== 'admin') {
+                            setEditingQuota({ id: user.id, value: user.daily_quota || 50 });
+                          }
+                        }}
+                        title={user.role !== 'admin' ? 'クリックして編集' : ''}
+                      >
+                        {user.role === 'admin' ? '-' : `${user.daily_quota || 50}件`}
+                      </span>
+                    )}
                   </td>
                   <td>{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
                   <td>
@@ -208,6 +355,16 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
           </table>
         </div>
       </div>
+
+      <style jsx>{`
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </>
   );
 }

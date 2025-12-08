@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   User,
-  Zap
+  Zap,
+  Calendar
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
@@ -35,6 +36,7 @@ export default function Layout({ children }: LayoutProps) {
   const adminItems = [
     { href: '/admin/users', label: 'ユーザー管理', icon: Users },
     { href: '/admin/settings', label: '予算設定', icon: Settings },
+    { href: '/admin/calendar-settings', label: 'カレンダー連携', icon: Calendar },
     { href: '/admin/import', label: 'インポート', icon: Upload },
   ];
 

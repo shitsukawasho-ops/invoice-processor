@@ -1,10 +1,11 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/utils/auth';
 import Layout from '@/components/Layout';
-import db from '@/lib/db';
+import pool from '@/utils/db';
 import CallResultForm from './CallResultForm';
-import { Phone, Mail, Building2, Clock, ArrowLeft } from 'lucide-react';
+import CustomerEditForm from './CustomerEditForm';
+import { Phone, Mail, Building2, Clock, ArrowLeft, User } from 'lucide-react';
 import Link from 'next/link';
 
 interface Customer {
@@ -29,7 +30,7 @@ interface CallLog {
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
@@ -37,22 +38,23 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const resolvedParams = await params;
   const customerId = parseInt(resolvedParams.id);
 
-  const customer = db.prepare(`
-    SELECT * FROM customers WHERE id = ?
-  `).get(customerId) as Customer | undefined;
+  const { rows: customerRows } = await pool.query<Customer>(`
+    SELECT * FROM customers WHERE id = $1
+  `, [customerId]);
+  const customer = customerRows[0];
 
   if (!customer) {
     redirect('/call-list');
   }
 
-  const callLogs = db.prepare(`
+  const { rows: callLogs } = await pool.query<CallLog>(`
     SELECT cl.*, u.name as user_name
     FROM call_logs cl
     JOIN users u ON cl.user_id = u.id
-    WHERE cl.customer_id = ?
+    WHERE cl.customer_id = $1
     ORDER BY cl.created_at DESC
     LIMIT 10
-  `).all(customerId) as CallLog[];
+  `, [customerId]);
 
   const statusLabels: Record<string, string> = {
     new: '未着手',
@@ -90,16 +92,22 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                   <Building2 size={24} />
                   {customer.company_name}
                 </h1>
-                <p style={{ color: 'var(--color-text-light)', marginTop: '0.25rem' }}>{customer.contact_name}</p>
+                <p style={{ color: 'var(--color-text-light)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <User size={14} />
+                  {customer.contact_name || '担当者未設定'}
+                </p>
               </div>
-              <span className={`badge badge-${customer.status}`}>
-                {statusLabels[customer.status]}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <CustomerEditForm customer={customer} />
+                <span className={`badge badge-${customer.status}`}>
+                  {statusLabels[customer.status]}
+                </span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
               <div>
-                <a 
+                <a
                   href={`tel:${customer.phone}`}
                   className="btn btn-primary btn-lg"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
@@ -108,12 +116,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                   {customer.phone}
                 </a>
               </div>
-              {customer.email && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-light)' }}>
-                  <Mail size={16} />
-                  {customer.email}
-                </div>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: customer.email ? 'var(--color-text-light)' : 'var(--color-text-muted)' }}>
+                <Mail size={16} />
+                {customer.email || 'メール未設定'}
+              </div>
             </div>
 
             {customer.next_action_date && (
@@ -174,3 +180,4 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     </Layout>
   );
 }
+
